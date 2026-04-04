@@ -7,11 +7,37 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-04
+
+### Added
+- 20 nouveaux analyseurs pour couverture exhaustive de l'UPGRADE-2.0.md officiel :
+  - BundleConfigurationAnalyzer : bundles supprimés/manquants dans bundles.php
+  - CalendarClockAnalyzer : sylius/calendar vers symfony/clock
+  - SecurityFirewallAnalyzer : renommage firewalls new_api_* vers api_*
+  - UserModelFieldAnalyzer : champs supprimés (locked, expiresAt, credentialsExpireAt)
+  - RemovedClassAnalyzer : 150+ classes supprimées
+  - RenamedServiceIdAnalyzer : 21 service IDs renommés/supprimés
+  - RemovedRouteAnalyzer : 43 routes supprimées
+  - SonataBlockEventAnalyzer : sonata_block_render_event vers hook()
+  - LiipImagineConfigAnalyzer : resolver/loader "default" vers "sylius_image"
+  - ApiSerializationGroupAnalyzer : préfixe sylius: manquant sur les groupes
+  - ApiEndpointRestructureAnalyzer : 8+ endpoints API restructurés
+  - ConstructorSignatureAnalyzer : 24 classes avec constructeurs modifiés
+  - GridFilterEntityAnalyzer : type entities vers entity
+  - UseWebpackConfigAnalyzer : suppression de use_webpack
+  - PhpNodeVersionAnalyzer : PHP 8.2+, Node 20+, Symfony 5.4
+  - ApiQueryExtensionSignatureAnalyzer : operationName vers Operation
+  - ClassMoveAnalyzer : 14 classes déplacées entre bundles
+  - ServiceVisibilityAnalyzer : accès direct au container (services privés)
+  - PaymentRequestEnvAnalyzer : variables d'env Messenger manquantes
+  - DeprecatedBundlePackageAnalyzer : 7 paquets supprimés
+- Total : 47 analyseurs, 458 tests, 1266 assertions
+
 ## [1.0.0] - 2026-04-04
 
 ### Added
 - Documentation complète : README, CONTRIBUTING, guides d'utilisation
-- 27 analyseurs couvrant tous les breaking changes Sylius 2.0
+- 27 analyseurs couvrant les breaking changes principaux Sylius 2.0
 - 5 reporters : Console, JSON, SARIF, Markdown, Baseline
 - 5 fixers automatiques avec mode interactif
 - GitHub Action pour intégration CI/CD

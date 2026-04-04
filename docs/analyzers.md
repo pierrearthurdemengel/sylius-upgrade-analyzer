@@ -33,6 +33,26 @@ This document describes every built-in analyzer included in Sylius Upgrade Analy
 25. [Doctrine XML Mapping](#25-doctrine-xml-mapping)
 26. [Custom Fixture](#26-custom-fixture)
 27. [Multi-Store Channel](#27-multi-store-channel)
+28. [Bundle Configuration](#28-bundle-configuration)
+29. [Calendar to Clock](#29-calendar-to-clock)
+30. [Security Firewall](#30-security-firewall)
+31. [User Model Field](#31-user-model-field)
+32. [Removed Class](#32-removed-class)
+33. [Renamed Service ID](#33-renamed-service-id)
+34. [Removed Route](#34-removed-route)
+35. [Sonata Block Event](#35-sonata-block-event)
+36. [LiipImagine Config](#36-liip-imagine-config)
+37. [API Serialization Group](#37-api-serialization-group)
+38. [API Endpoint Restructure](#38-api-endpoint-restructure)
+39. [Constructor Signature](#39-constructor-signature)
+40. [Grid Filter Entity](#40-grid-filter-entity)
+41. [Use Webpack Config](#41-use-webpack-config)
+42. [PHP Node Version](#42-php-node-version)
+43. [API Query Extension Signature](#43-api-query-extension-signature)
+44. [Class Move](#44-class-move)
+45. [Service Visibility](#45-service-visibility)
+46. [Payment Request Env](#46-payment-request-env)
+47. [Deprecated Bundle Package](#47-deprecated-bundle-package)
 
 ---
 
@@ -653,3 +673,338 @@ Based on the number of channel-specific configurations and hardcoded references.
 ### Documentation
 
 - [Sylius Channels](https://docs.sylius.com/en/latest/the-book/configuration/channels.html)
+
+---
+
+## 28. Bundle Configuration
+
+**Class:** `BundleConfigurationAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- 7 bundles to remove from `config/bundles.php`: SyliusCalendarBundle, winzouStateMachineBundle, BazingaHateoasBundle, JMSSerializerBundle, FOSRestBundle, old ApiPlatformBundle namespace, SyliusLabsPolyfillBundle
+- 6 bundles required to add: new ApiPlatformBundle, SyliusTwigHooksBundle, TwigComponentBundle, StimulusBundle, LiveComponentBundle, AutocompleteBundle
+
+### Estimation: 30 minutes per bundle issue
+
+---
+
+## 29. Calendar to Clock
+
+**Class:** `CalendarClockAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- `sylius/calendar` in composer.json
+- Usage of `Sylius\Calendar\Provider\DateTimeProviderInterface` in PHP files
+- Replace with `Symfony\Component\Clock\ClockInterface`
+
+### Estimation: 60 minutes per usage
+
+---
+
+## 30. Security Firewall
+
+**Class:** `SecurityFirewallAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- Firewall names `new_api_admin_user` (rename to `api_admin`) and `new_api_shop_user` (rename to `api_shop`)
+- 8 deprecated `sylius.security.new_api_*` parameter references
+
+### Estimation: 60 minutes per reference
+
+---
+
+## 31. User Model Field
+
+**Class:** `UserModelFieldAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- Properties/methods: `locked`, `isLocked`, `expiresAt`, `credentialsExpireAt` and their getters/setters
+- Implementation of `\Serializable` interface on User entities
+- `getSalt()` method usage
+
+### Estimation: 60 minutes per field/method
+
+---
+
+## 32. Removed Class
+
+**Class:** `RemovedClassAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+150+ removed classes including:
+- All `Templating\Helper\*` classes (CoreBundle, CurrencyBundle, MoneyBundle, etc.)
+- `UiBundle\Registry\*`, `UiBundle\Renderer\*`, `UiBundle\ContextProvider\*`
+- `UiBundle\Twig\*` extensions (TemplateEventExtension, SortByExtension, etc.)
+- `AdminBundle\Controller\NotificationController`, `Dashboard\StatisticsController`
+- `UserBundle\Security\UserLogin`, `UserPasswordHasher`
+- `Component\Core\Dashboard\*` classes
+- `ProductBundle\Controller\ProductSlugController`, `ProductAttributeController`
+
+### Estimation: 60 minutes per removed class usage
+
+---
+
+## 33. Renamed Service ID
+
+**Class:** `RenamedServiceIdAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+21 renamed or removed Sylius service IDs in YAML config files, including:
+- `sylius.zone_matcher` → `sylius.matcher.zone`
+- `sylius.province_naming_provider` → `sylius.provider.province_naming`
+- `sylius.form_registry.payum_gateway_config` → `sylius.form_registry.payment_gateway_config`
+- Removed: `sylius.security.password_hasher`, `sylius.controller.payum`, etc.
+
+### Estimation: 30 minutes per service
+
+---
+
+## 34. Removed Route
+
+**Class:** `RemovedRouteAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+43 removed routes referenced in PHP (`src/`) and Twig (`templates/`) files:
+- All `sylius_admin_partial_*` routes
+- All `sylius_admin_ajax_*` routes
+- All `sylius_shop_partial_*` routes
+- All `sylius_shop_ajax_*` routes
+
+### Estimation: 30 minutes per route reference
+
+---
+
+## 35. Sonata Block Event
+
+**Class:** `SonataBlockEventAnalyzer`
+**Category:** Twig
+**Severity:** BREAKING
+
+### What it detects
+
+- `sonata_block_render_event()` calls in Twig templates (replaced by `hook()`)
+- `sylius_template_event()` calls in Twig templates
+- `BlockEventListener` references in PHP and YAML config files
+
+### Estimation: 60 minutes per usage
+
+---
+
+## 36. LiipImagine Config
+
+**Class:** `LiipImagineConfigAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- Resolver named `"default"` (must change to `"sylius_image"`)
+- Loader named `"default"` (must change to `"sylius_image"`)
+- `resolve_cache_relative` filter references
+
+### Estimation: 60 minutes per config change
+
+---
+
+## 37. API Serialization Group
+
+**Class:** `ApiSerializationGroupAnalyzer`
+**Category:** API
+**Severity:** BREAKING
+
+### What it detects
+
+- Serialization groups in PHP attributes/annotations using `admin:` or `shop:` prefix without `sylius:` prefix
+- Non-prefixed groups in YAML serialization config
+
+### Estimation: 30 minutes per group reference
+
+---
+
+## 38. API Endpoint Restructure
+
+**Class:** `ApiEndpointRestructureAnalyzer`
+**Category:** API
+**Severity:** BREAKING
+
+### What it detects
+
+8+ restructured or removed API endpoint paths:
+- `/api/v2/admin/avatar-images/` → nested under administrators
+- `/api/v2/shop/reset-password-requests` → `/api/v2/shop/reset-password`
+- `/api/v2/shop/account-verification-requests` → `/api/v2/shop/verify-shop-user`
+- Removed: gateway-configs, channel-price-history-configs, shop-billing-datas, zone-members, order-item-units
+
+### Estimation: 60 minutes per endpoint reference
+
+---
+
+## 39. Constructor Signature
+
+**Class:** `ConstructorSignatureAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+PHP classes extending 24 Sylius classes with changed constructor signatures:
+- Twig extensions: CheckoutStepsExtension, PriceExtension, CurrencyExtension, etc.
+- Controllers: ImpersonateUserController, ContactController, SecurityController
+- Listeners: ShipmentShipListener, OrderCompleteListener
+- Services: ZoneMatcher, ImageUploader, ProductVariantPriceCalculator, etc.
+
+### Estimation: 120 minutes per class
+
+---
+
+## 40. Grid Filter Entity
+
+**Class:** `GridFilterEntityAnalyzer`
+**Category:** Grid
+**Severity:** BREAKING
+
+### What it detects
+
+- Grid filter `type: entities` (must change to `type: entity`)
+- Grid filter option `field:` singular (must change to `fields:` array)
+
+### Estimation: 30 minutes per filter
+
+---
+
+## 41. Use Webpack Config
+
+**Class:** `UseWebpackConfigAnalyzer`
+**Category:** Frontend
+**Severity:** BREAKING
+
+### What it detects
+
+- `use_webpack` key in `sylius_ui` YAML config
+- `use_webpack` variable in Twig templates
+
+### Estimation: 60 minutes per reference
+
+---
+
+## 42. PHP Node Version
+
+**Class:** `PhpNodeVersionAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+- PHP version constraint allowing < 8.2
+- Node.js engine constraint allowing < 20
+- Symfony 5.4 dependencies without 6.4
+
+### Estimation: 30 minutes per version issue
+
+---
+
+## 43. API Query Extension Signature
+
+**Class:** `ApiQueryExtensionSignatureAnalyzer`
+**Category:** API
+**Severity:** BREAKING
+
+### What it detects
+
+- Classes implementing `QueryCollectionExtensionInterface` or `QueryItemExtensionInterface`
+- Old method signature using `string $operationName` (must change to `Operation $operation`)
+
+### Estimation: 60 minutes per extension class
+
+---
+
+## 44. Class Move
+
+**Class:** `ClassMoveAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+14 classes moved between bundles:
+- `ShopBundle\EmailManager\ContactEmailManager` → `CoreBundle\Mailer\ContactEmailManager`
+- `AdminBundle\EmailManager\ShipmentEmailManager` → `CoreBundle\Mailer\ShipmentEmailManager`
+- `CoreBundle\Theme\ChannelBasedThemeContext` → `ShopBundle\Theme\ChannelBasedThemeContext`
+- `UiBundle\Storage\FilterStorageInterface` → `GridBundle\Storage\FilterStorageInterface`
+- API Bundle command handler renames (VerifyCustomerAccount → VerifyShopUser, etc.)
+
+### Estimation: 30 minutes per class move
+
+---
+
+## 45. Service Visibility
+
+**Class:** `ServiceVisibilityAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+Direct container access to Sylius services (all now private by default):
+- `$container->get('sylius.*')`
+- `$this->get('sylius.*')`
+- `$this->container->get('sylius.*')`
+
+### Estimation: 60 minutes per direct access
+
+---
+
+## 46. Payment Request Env
+
+**Class:** `PaymentRequestEnvAnalyzer`
+**Category:** Deprecation
+**Severity:** WARNING
+
+### What it detects
+
+- Missing `SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN` env var
+- Missing `SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN` env var
+- Missing `payment_request` transport in messenger.yaml
+
+### Estimation: 30 minutes
+
+---
+
+## 47. Deprecated Bundle Package
+
+**Class:** `DeprecatedBundlePackageAnalyzer`
+**Category:** Deprecation
+**Severity:** BREAKING
+
+### What it detects
+
+7 removed/replaced packages in composer.json:
+- `friendsofsymfony/rest-bundle` (removed, API Platform handles API)
+- `jms/serializer-bundle` (removed, use Symfony Serializer)
+- `willdurand/hateoas-bundle` / `bazinga/hateoas-bundle` (removed)
+- `sylius/calendar` (replaced by symfony/clock)
+- `sylius-labs/polyfill-symfony-security` (no longer needed)
+- `stripe/stripe-php` (Stripe gateway removed from core)
+
+### Estimation: 60 minutes per package
