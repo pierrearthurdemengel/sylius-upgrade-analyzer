@@ -23,10 +23,146 @@ if (!$autoloaderFound) {
     exit(1);
 }
 
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Api\ApiEndpointRestructureAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Api\ApiQueryExtensionSignatureAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Api\ApiSerializationGroupAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\ApiPlatform\ApiPlatformMigrationAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\AdminMenuEventAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\BehatContextDeprecationAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\BundleConfigurationAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CalendarClockAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ClassMoveAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CommandHandlerRenameAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ConstructorSignatureAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CustomFixtureAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DeprecatedBundlePackageAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DeprecatedEmailManagerAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DoctrineXmlMappingAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\FormTypeExtensionPriorityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\GridFilterEntityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\LiipImagineConfigAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\MessageBusRenameAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\MultiStoreChannelAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\OrderProcessorPriorityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PaymentRequestEnvAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PayumAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PromotionRuleCheckerAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedClassAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedConfigKeyAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedPaymentGatewayAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedRouteAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RenamedServiceIdAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RoutingImportAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SecurityFirewallAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ServiceDecoratorAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ServiceVisibilityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ShippingCalculatorAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SonataBlockEventAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\TranslationKeyAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UseWebpackConfigAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserEncoderAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserModelFieldAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PhpNodeVersionAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\WinzouStateMachineAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\JQueryAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\SemanticUiAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\WebpackEncoreAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient;
+use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\MarkdownReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\SarifReporter;
 use Symfony\Component\Console\Application;
+use Symfony\Component\HttpClient\HttpClient;
 
-$application = new Application('sylius-upgrade-analyzer', '1.0.0');
-$application->add(new AnalyzeCommand());
+/* Détection du mode --no-marketplace avant la construction des analyseurs */
+$noMarketplace = in_array('--no-marketplace', $argv, true);
+
+/* Client HTTP partagé pour les appels réseau */
+$httpClient = HttpClient::create();
+
+/* Construction de la liste complète des analyseurs */
+$analyzers = [
+    // Templates & Frontend
+    new TwigTemplateOverrideAnalyzer(),
+    new SonataBlockEventAnalyzer(),
+    new SemanticUiAnalyzer(),
+    new JQueryAnalyzer(),
+    new WebpackEncoreAnalyzer(),
+
+    // Deprecations & Breaking Changes
+    new WinzouStateMachineAnalyzer(),
+    new SwiftMailerAnalyzer(),
+    new UserEncoderAnalyzer(),
+    new PayumAnalyzer(),
+    new MessageBusRenameAnalyzer(),
+    new CommandHandlerRenameAnalyzer(),
+    new DeprecatedEmailManagerAnalyzer(),
+    new RemovedPaymentGatewayAnalyzer(),
+    new ServiceDecoratorAnalyzer(),
+    new OrderProcessorPriorityAnalyzer(),
+    new FormTypeExtensionPriorityAnalyzer(),
+    new BehatContextDeprecationAnalyzer(),
+    new AdminMenuEventAnalyzer(),
+    new TranslationKeyAnalyzer(),
+    new PromotionRuleCheckerAnalyzer(),
+    new ShippingCalculatorAnalyzer(),
+    new DoctrineXmlMappingAnalyzer(),
+    new CustomFixtureAnalyzer(),
+    new MultiStoreChannelAnalyzer(),
+    new BundleConfigurationAnalyzer(),
+    new CalendarClockAnalyzer(),
+    new SecurityFirewallAnalyzer(),
+    new UserModelFieldAnalyzer(),
+    new RemovedClassAnalyzer(),
+    new RenamedServiceIdAnalyzer(),
+    new RemovedRouteAnalyzer(),
+    new LiipImagineConfigAnalyzer(),
+    new ConstructorSignatureAnalyzer(),
+    new GridFilterEntityAnalyzer(),
+    new UseWebpackConfigAnalyzer(),
+    new PhpNodeVersionAnalyzer(),
+    new ClassMoveAnalyzer(),
+    new ServiceVisibilityAnalyzer(),
+    new PaymentRequestEnvAnalyzer(),
+    new DeprecatedBundlePackageAnalyzer(),
+    new RemovedConfigKeyAnalyzer(),
+    new RoutingImportAnalyzer(),
+
+    // Plugins
+    new PluginCompatibilityAnalyzer(
+        new AddonsMarketplaceClient($httpClient),
+        new PackagistClient($httpClient),
+        $noMarketplace,
+    ),
+
+    // Grid & Resource
+    new GridCustomizationAnalyzer(),
+    new ResourceBundleAnalyzer(),
+
+    // API Platform
+    new ApiPlatformMigrationAnalyzer(),
+    new ApiSerializationGroupAnalyzer(),
+    new ApiEndpointRestructureAnalyzer(),
+    new ApiQueryExtensionSignatureAnalyzer(),
+];
+
+/* Construction de la liste des reporters */
+$reporters = [
+    new ConsoleReporter(),
+    new JsonReporter(),
+    new SarifReporter(),
+    new MarkdownReporter(),
+];
+
+$application = new Application('sylius-upgrade-analyzer', '1.1.0');
+$application->add(new AnalyzeCommand($analyzers, $reporters));
 $application->setDefaultCommand('sylius-upgrade:analyze');
 $application->run();
