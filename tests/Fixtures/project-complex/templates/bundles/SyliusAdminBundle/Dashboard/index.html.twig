@@ -1,0 +1,52 @@
+{% extends '@SyliusAdmin/Dashboard/index.html.twig' %}
+
+{% block statistics %}
+    {{ parent() }}
+
+    <div class="ui stackable two column grid">
+        <div class="column">
+            <div class="ui segment">
+                <h3 class="ui header">{{ 'app.ui.recent_orders'|trans }}</h3>
+                <table class="ui very basic compact table">
+                    <thead>
+                        <tr>
+                            <th>{{ 'sylius.ui.number'|trans }}</th>
+                            <th>{{ 'sylius.ui.customer'|trans }}</th>
+                            <th>{{ 'sylius.ui.total'|trans }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in latestOrders|default([]) %}
+                            <tr>
+                                <td>{{ order.number }}</td>
+                                <td>{{ order.customer.email }}</td>
+                                <td>{{ order.total|sylius_format_money(order.currencyCode) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="column">
+            <div class="ui segment">
+                <h3 class="ui header">{{ 'app.ui.low_stock_products'|trans }}</h3>
+                <table class="ui very basic compact table">
+                    <thead>
+                        <tr>
+                            <th>{{ 'sylius.ui.product'|trans }}</th>
+                            <th>{{ 'sylius.ui.stock'|trans }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for variant in lowStockVariants|default([]) %}
+                            <tr>
+                                <td>{{ variant.product.name }}</td>
+                                <td>{{ variant.onHand }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

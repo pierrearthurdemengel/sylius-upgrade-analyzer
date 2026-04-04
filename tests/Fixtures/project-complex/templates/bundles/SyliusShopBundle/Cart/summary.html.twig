@@ -1,0 +1,29 @@
+{% extends '@SyliusShop/Cart/summary.html.twig' %}
+
+{% block header %}
+    <h1 class="ui header">
+        <i class="shopping cart icon"></i>
+        <div class="content">
+            {{ 'sylius.ui.your_shopping_cart'|trans }}
+            <div class="sub header">{{ 'app.ui.cart_summary_description'|trans }}</div>
+        </div>
+    </h1>
+{% endblock %}
+
+{% block summary %}
+    <div class="ui segment">
+        {{ parent() }}
+
+        <div class="ui divider"></div>
+
+        <div class="ui right aligned grid">
+            <div class="column">
+                <h3>{{ 'sylius.ui.subtotal'|trans }}: {{ cart.itemsTotal|sylius_format_money(sylius.channel.baseCurrency.code) }}</h3>
+                {% if cart.orderPromotionTotal != 0 %}
+                    <p class="ui red text">{{ 'sylius.ui.discount'|trans }}: {{ cart.orderPromotionTotal|sylius_format_money(sylius.channel.baseCurrency.code) }}</p>
+                {% endif %}
+                <h2>{{ 'sylius.ui.total'|trans }}: {{ cart.total|sylius_format_money(sylius.channel.baseCurrency.code) }}</h2>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,16 @@
+sylius_grid:
+    grids:
+        app_admin_order:
+            driver:
+                name: doctrine/orm
+                options:
+                    class: '%sylius.model.order.class%'
+            sorting:
+                number: desc
+            fields:
+                number:
+                    type: string
+                    label: sylius.ui.number
+                state:
+                    type: string
+                    label: sylius.ui.state

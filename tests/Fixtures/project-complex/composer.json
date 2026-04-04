@@ -1,0 +1,56 @@
+{
+    "name": "acme/sylius-shop",
+    "type": "project",
+    "description": "Acme Sylius E-Commerce Application",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "sylius/sylius": "~1.12.0",
+        "sylius/invoicing-plugin": "^0.22",
+        "bitbag/sylius-cms-plugin": "^4.0",
+        "bitbag/sylius-wishlist-plugin": "^2.0",
+        "bitbag/sylius-shipping-export-plugin": "^1.0",
+        "setono/sylius-analytics-plugin": "^1.0",
+        "stefandoorn/sylius-google-tag-manager-plugin": "^1.0",
+        "mangoweb-sylius/sylius-extended-channels": "^0.6",
+        "odiseo/sylius-blog-plugin": "^0.8",
+        "madcoders/sylius-rma-plugin": "^1.0",
+        "synolia/sylius-akeneo-plugin": "^3.0",
+        "flux-se/sylius-payum-stripe-plugin": "^2.0",
+        "some-vendor/incompatible-plugin": "^1.0",
+        "swiftmailer/swiftmailer": "^6.0",
+        "payum/core": "^1.7",
+        "payum/payum-bundle": "^2.0",
+        "winzou/state-machine-bundle": "^0.6"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5",
+        "symfony/browser-kit": "^5.4 || ^6.0",
+        "lchrusciel/api-test-case": "^5.0",
+        "phpspec/phpspec": "^7.0",
+        "phpstan/phpstan": "^1.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/flex": true,
+            "dealerdirect/phpcodesniffer-composer-installer": false
+        },
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "symfony": {
+            "allow-contrib": false,
+            "require": "^5.4 || ^6.0"
+        }
+    }
+}

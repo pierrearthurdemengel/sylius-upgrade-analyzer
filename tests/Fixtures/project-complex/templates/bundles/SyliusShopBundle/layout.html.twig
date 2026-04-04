@@ -1,0 +1,58 @@
+{% extends '@SyliusShop/layout.html.twig' %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('build/app.css') }}">
+{% endblock %}
+
+{% block header %}
+    <div class="ui fixed inverted menu">
+        <div class="ui container">
+            <a href="{{ path('sylius_shop_homepage') }}" class="header item">
+                <img class="logo" src="{{ asset('images/logo.png') }}" alt="{{ sylius.channel.name }}">
+                {{ sylius.channel.name }}
+            </a>
+            {% include '@SyliusShop/Cart/_widget.html.twig' %}
+            {% include '@SyliusShop/Menu/_security.html.twig' %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="ui container" style="margin-top: 80px;">
+        {% block flash_message %}
+            {{ parent() }}
+        {% endblock %}
+
+        {{ parent() }}
+    </div>
+{% endblock %}
+
+{% block footer %}
+    <div class="ui inverted vertical footer segment">
+        <div class="ui container">
+            <div class="ui stackable inverted divided equal height stackable grid">
+                <div class="three wide column">
+                    <h4 class="ui inverted header">{{ 'app.ui.about_us'|trans }}</h4>
+                </div>
+                <div class="seven wide column">
+                    <h4 class="ui inverted header">{{ 'app.ui.contact'|trans }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            $('.ui.dropdown').dropdown();
+            $('.ui.sidebar').sidebar('attach events', '.toc.item');
+        });
+    </script>
+    {% block stimulus_controllers %}
+        {{ stimulus_controller('sylius/cart', { url: path('sylius_shop_ajax_cart_items') }) }}
+    {% endblock %}
+{% endblock %}

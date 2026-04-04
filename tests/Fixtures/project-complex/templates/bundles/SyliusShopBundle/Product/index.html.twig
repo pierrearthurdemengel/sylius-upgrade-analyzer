@@ -1,0 +1,30 @@
+{% extends '@SyliusShop/Product/index.html.twig' %}
+
+{% block product_list %}
+    <div class="ui three column stackable grid">
+        {% for product in products %}
+            <div class="column">
+                <div class="ui fluid card">
+                    <div class="image">
+                        {% include '@SyliusShop/Product/_mainImage.html.twig' %}
+                    </div>
+                    <div class="content">
+                        <a href="{{ path('sylius_shop_product_show', {'slug': product.slug}) }}" class="header">
+                            {{ product.name }}
+                        </a>
+                        <div class="meta">
+                            <span class="price">{{ sylius_calculate_price(product.variants.first)|sylius_format_money(sylius.channel.baseCurrency.code) }}</span>
+                        </div>
+                    </div>
+                    <div class="extra content">
+                        {% include '@SyliusShop/Product/_rating.html.twig' %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
+
+{% block pagination %}
+    {% include '@SyliusShop/Common/Pagination/_simple.html.twig' %}
+{% endblock %}

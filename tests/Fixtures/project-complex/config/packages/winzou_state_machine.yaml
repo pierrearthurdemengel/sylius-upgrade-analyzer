@@ -1,0 +1,41 @@
+winzou_state_machine:
+    sylius_order_checkout:
+        class: '%sylius.model.order.class%'
+        property_path: checkoutState
+        graph: sylius_order_checkout
+        states:
+            cart: ~
+            addressed: ~
+            shipping_selected: ~
+            completed: ~
+        transitions:
+            address:
+                from: [cart]
+                to: addressed
+            complete:
+                from: [shipping_selected]
+                to: completed
+    sylius_order_payment:
+        class: '%sylius.model.order.class%'
+        property_path: paymentState
+        graph: sylius_order_payment
+        states:
+            cart: ~
+            awaiting_payment: ~
+            paid: ~
+        transitions:
+            pay:
+                from: [awaiting_payment]
+                to: paid
+    sylius_order_shipping:
+        class: '%sylius.model.order.class%'
+        property_path: shippingState
+        graph: sylius_order_shipping
+        states:
+            cart: ~
+            ready: ~
+            shipped: ~
+        transitions:
+            ship:
+                from: [ready]
+                to: shipped

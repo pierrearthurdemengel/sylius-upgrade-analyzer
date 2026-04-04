@@ -1,0 +1,3 @@
+security:
+    encoders:
+        Sylius\Component\User\Model\UserInterface: argon2i

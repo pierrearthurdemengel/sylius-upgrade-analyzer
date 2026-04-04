@@ -1,0 +1,6 @@
+sylius_resource:
+    resources:
+        app.product:
+            classes:
+                model: App\Entity\Product\Product
+                repository: App\Repository\ProductRepository

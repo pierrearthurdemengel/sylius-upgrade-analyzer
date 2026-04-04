@@ -1,0 +1,12 @@
+{% extends '@SyliusShop/Product/show.html.twig' %}
+
+{% block breadcrumb %}
+    {% include '@SyliusShop/Product/_breadcrumb.html.twig' %}
+{% endblock %}
+
+{% block product_details %}
+    <div class="ui segment">
+        {{ parent() }}
+        {% include 'Product/_custom_tabs.html.twig' %}
+    </div>
+{% endblock %}

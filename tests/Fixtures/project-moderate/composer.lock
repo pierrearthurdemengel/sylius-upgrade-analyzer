@@ -1,0 +1,153 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies"
+    ],
+    "content-hash": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
+    "packages": [
+        {
+            "name": "sylius/sylius",
+            "version": "v1.14.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Sylius/Sylius.git",
+                "reference": "ff1234567890"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Sylius\\": "src/Sylius/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Sylius E-Commerce Framework"
+        },
+        {
+            "name": "sylius/invoicing-plugin",
+            "version": "v0.22.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Sylius/InvoicingPlugin.git",
+                "reference": "def789abc012"
+            },
+            "type": "sylius-plugin",
+            "autoload": {
+                "psr-4": {
+                    "Sylius\\InvoicingPlugin\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Invoicing plugin for Sylius."
+        },
+        {
+            "name": "bitbag/sylius-cms-plugin",
+            "version": "v4.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/BitBagCommerce/SyliusCmsPlugin.git",
+                "reference": "aaa111bbb222"
+            },
+            "type": "sylius-plugin",
+            "autoload": {
+                "psr-4": {
+                    "BitBag\\SyliusCmsPlugin\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "CMS plugin for Sylius."
+        },
+        {
+            "name": "bitbag/sylius-wishlist-plugin",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/BitBagCommerce/SyliusWishlistPlugin.git",
+                "reference": "bbb333ccc444"
+            },
+            "type": "sylius-plugin",
+            "autoload": {
+                "psr-4": {
+                    "BitBag\\SyliusWishlistPlugin\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Wishlist plugin for Sylius."
+        },
+        {
+            "name": "setono/sylius-analytics-plugin",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Setono/SyliusAnalyticsPlugin.git",
+                "reference": "ccc555ddd666"
+            },
+            "type": "sylius-plugin",
+            "autoload": {
+                "psr-4": {
+                    "Setono\\SyliusAnalyticsPlugin\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Google Analytics plugin for Sylius."
+        },
+        {
+            "name": "some-vendor/unknown-sylius-plugin",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/some-vendor/unknown-sylius-plugin.git",
+                "reference": "eee777fff888"
+            },
+            "type": "sylius-plugin",
+            "autoload": {
+                "psr-4": {
+                    "SomeVendor\\UnknownSyliusPlugin\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "An unknown Sylius plugin."
+        },
+        {
+            "name": "winzou/state-machine-bundle",
+            "version": "v0.6.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/winzou/StateMachineBundle.git",
+                "reference": "ddd666eee777"
+            },
+            "type": "symfony-bundle",
+            "autoload": {
+                "psr-4": {
+                    "winzou\\Bundle\\StateMachineBundle\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "A state machine bundle for Symfony"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">=8.1"
+    },
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

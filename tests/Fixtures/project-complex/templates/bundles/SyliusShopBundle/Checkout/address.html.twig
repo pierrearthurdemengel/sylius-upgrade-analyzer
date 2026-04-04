@@ -1,0 +1,80 @@
+{% extends '@SyliusShop/Checkout/address.html.twig' %}
+
+{% block content %}
+    <div class="ui two column stackable grid">
+        <div class="column">
+            {{ form_start(form) }}
+
+            <h3 class="ui dividing header">{{ 'sylius.ui.shipping_address'|trans }}</h3>
+
+            {% include '@SyliusShop/Checkout/Address/_form.html.twig' with {
+                'address_form': form.shippingAddress,
+                'address_type': 'shipping'
+            } %}
+
+            <div class="ui segment">
+                <div class="field">
+                    <div class="ui toggle checkbox" id="different-billing-address">
+                        {{ form_widget(form.differentBillingAddress) }}
+                        {{ form_label(form.differentBillingAddress) }}
+                    </div>
+                </div>
+            </div>
+
+            <div id="billing-address-container" style="display: none;">
+                <h3 class="ui dividing header">{{ 'sylius.ui.billing_address'|trans }}</h3>
+                {% include '@SyliusShop/Checkout/Address/_form.html.twig' with {
+                    'address_form': form.billingAddress,
+                    'address_type': 'billing'
+                } %}
+            </div>
+
+            <button type="submit" class="ui large primary fluid button">
+                <i class="arrow right icon"></i>
+                {{ 'sylius.ui.next'|trans }}
+            </button>
+
+            {{ form_end(form) }}
+        </div>
+
+        <div class="column">
+            {% include '@SyliusShop/Checkout/_summary.html.twig' %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        $(document).ready(function() {
+            var $checkbox = $('#different-billing-address input[type="checkbox"]');
+            var $billingContainer = $('#billing-address-container');
+
+            $checkbox.on('change', function() {
+                if ($(this).is(':checked')) {
+                    $billingContainer.slideDown();
+                } else {
+                    $billingContainer.slideUp();
+                }
+            });
+
+            if ($checkbox.is(':checked')) {
+                $billingContainer.show();
+            }
+
+            $('select[name$="[countryCode]"]').on('change', function() {
+                var $provinceContainer = $(this).closest('.address-form').find('.province-container');
+                var countryCode = $(this).val();
+
+                $.ajax({
+                    url: '{{ path("sylius_shop_ajax_render_province_form") }}',
+                    type: 'GET',
+                    data: { countryCode: countryCode },
+                    success: function(response) {
+                        $provinceContainer.html(response);
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}

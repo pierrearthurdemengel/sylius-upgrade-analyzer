@@ -1,0 +1,39 @@
+{% extends '@SyliusShop/Product/show.html.twig' %}
+
+{% block breadcrumb %}
+    {% include '@SyliusShop/Product/_breadcrumb.html.twig' %}
+{% endblock %}
+
+{% block product_media %}
+    <div class="ui segment">
+        <div class="product-gallery">
+            <img id="main-image" src="{{ product.images.first ? product.images.first.path|imagine_filter('sylius_shop_product_original') : asset('images/placeholder.png') }}" class="ui fluid image">
+            <div class="ui small images thumbnails">
+                {% for image in product.images %}
+                    <img src="{{ image.path|imagine_filter('sylius_shop_product_thumbnail') }}"
+                         class="thumbnail"
+                         data-large-url="{{ image.path|imagine_filter('sylius_shop_product_original') }}">
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block product_details %}
+    <div class="ui segment">
+        {{ parent() }}
+
+        {% include 'Product/_custom_tabs.html.twig' with {'product': product} %}
+
+        {% if product.attributes|length > 0 %}
+            <h3 class="ui dividing header">{{ 'sylius.ui.specification'|trans }}</h3>
+            {% include '@SyliusShop/Product/_attributes.html.twig' %}
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block product_reviews %}
+    <div class="ui segment">
+        {{ parent() }}
+    </div>
+{% endblock %}

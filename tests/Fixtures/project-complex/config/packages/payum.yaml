@@ -1,0 +1,11 @@
+payum:
+    security:
+        token_storage:
+            Payum\Core\Model\Token: { doctrine: orm }
+    gateways:
+        offline:
+            factory: offline
+        stripe_checkout:
+            factory: stripe_checkout
+            publishable_key: '%env(STRIPE_PUBLISHABLE_KEY)%'
+            secret_key: '%env(STRIPE_SECRET_KEY)%'
