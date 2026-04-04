@@ -1,0 +1,74 @@
+# Configuration des services pour le bundle SyliusUpgradeAnalyzer.
+# Enregistre les analyseurs, reporters, clients marketplace et la commande principale.
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    # --- Analyseurs Twig ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigHookMigrationMapper: ~
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseurs de depreciations ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserEncoderAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PayumAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\WinzouStateMachineAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseur de plugins ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseur de grilles ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseur de ressources ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseurs front-end ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\SemanticUiAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\JQueryAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\WebpackEncoreAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Analyseur API Platform ---
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\ApiPlatform\ApiPlatformMigrationAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
+    # --- Clients Marketplace ---
+    PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient: ~
+
+    PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient: ~
+
+    # --- Reporters ---
+    PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter:
+        tags: ['sylius_upgrade.reporter']
+
+    PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter:
+        tags: ['sylius_upgrade.reporter']
+
+    # --- Commande principale ---
+    # Les arguments $analyzers et $reporters sont injectes via le CompilerPass
+    # et l'autoconfiguration des reporters.
+    PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand:
+        arguments:
+            $analyzers: !tagged_iterator sylius_upgrade.analyzer
+            $reporters: !tagged_iterator sylius_upgrade.reporter
+        tags: ['console.command']
