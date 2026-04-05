@@ -16,13 +16,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 final class CsvReporter implements ReporterInterface
 {
     /** BOM UTF-8 pour compatibilité Excel */
-    private const string UTF8_BOM = "\xEF\xBB\xBF";
+    private const UTF8_BOM = "\xEF\xBB\xBF";
 
     /** Séparateur compatible Excel FR */
-    private const string SEPARATOR = ';';
+    private const SEPARATOR = ';';
 
     /** En-têtes des colonnes */
-    private const array HEADERS = [
+    private const HEADERS = [
         'Catégorie',
         'Sévérité',
         'Analyseur',

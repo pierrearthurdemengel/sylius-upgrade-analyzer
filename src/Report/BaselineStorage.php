@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\Report;
 
-use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
-use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 

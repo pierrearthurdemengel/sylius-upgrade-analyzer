@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\ComposerJsonNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -152,6 +151,12 @@ final class AnalyzeCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Vélocité de l\'équipe en heures par sprint (pour le plan de sprint)',
             )
+            ->addOption(
+                'project-name',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Nom du projet (déduit du composer.json ou du répertoire si non fourni)',
+            )
         ;
     }
 
@@ -174,6 +179,13 @@ final class AnalyzeCommand extends Command
             targetVersion: $targetVersion,
             projectPath: $projectPath,
         );
+
+        /* Résolution du nom de projet : option > composer.json > nom du répertoire */
+        $projectName = $input->getOption('project-name');
+        if (!is_string($projectName) || $projectName === '') {
+            $projectName = $this->resolveProjectName($projectPath);
+        }
+        $report->setProjectName($projectName);
 
         /* Filtrage des analyseurs selon l'option --only */
         $onlyAnalyzers = $input->getOption('only');
@@ -335,5 +347,26 @@ final class AnalyzeCommand extends Command
     private function getReporter(string $format): ?ReporterInterface
     {
         return $this->reporters[$format] ?? null;
+    }
+
+    /**
+     * Déduit le nom du projet depuis le champ "name" du composer.json
+     * ou, à défaut, depuis le nom du répertoire racine.
+     */
+    private function resolveProjectName(string $projectPath): string
+    {
+        $composerJsonPath = $projectPath . '/composer.json';
+
+        if (file_exists($composerJsonPath)) {
+            $content = file_get_contents($composerJsonPath);
+            if ($content !== false) {
+                $data = json_decode($content, true);
+                if (is_array($data) && isset($data['name']) && is_string($data['name']) && $data['name'] !== '') {
+                    return $data['name'];
+                }
+            }
+        }
+
+        return basename($projectPath);
     }
 }

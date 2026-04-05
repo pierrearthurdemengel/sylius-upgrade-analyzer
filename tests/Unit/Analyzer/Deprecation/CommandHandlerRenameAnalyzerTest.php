@@ -8,7 +8,6 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CommandHandlerRenameAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
-use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
 /**
  * Tests unitaires pour l'analyseur de renommage Command/Handler.

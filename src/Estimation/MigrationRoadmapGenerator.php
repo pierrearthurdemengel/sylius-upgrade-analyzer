@@ -16,12 +16,12 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 final class MigrationRoadmapGenerator
 {
     /** Phases de la migration, dans l'ordre d'exécution */
-    private const string STAGE_PREREQUISITES = 'Prérequis';
-    private const string STAGE_AUTO_FIX = 'Corrections automatiques';
-    private const string STAGE_BLOCKING = 'Changements bloquants';
-    private const string STAGE_FRONTEND = 'Frontend';
-    private const string STAGE_PLUGINS = 'Plugins';
-    private const string STAGE_VALIDATION = 'Validation';
+    private const STAGE_PREREQUISITES = 'Prérequis';
+    private const STAGE_AUTO_FIX = 'Corrections automatiques';
+    private const STAGE_BLOCKING = 'Changements bloquants';
+    private const STAGE_FRONTEND = 'Frontend';
+    private const STAGE_PLUGINS = 'Plugins';
+    private const STAGE_VALIDATION = 'Validation';
 
     /**
      * Génère la feuille de route de migration complète.

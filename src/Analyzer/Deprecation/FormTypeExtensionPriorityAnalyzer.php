@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
+use PhpParser\Node;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
+use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
-use PhpParser\Node;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\ParserFactory;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Yaml\Yaml;
 
@@ -123,7 +123,7 @@ final class FormTypeExtensionPriorityAnalyzer implements AnalyzerInterface
             }
 
             /* Visiteur pour detecter les classes heritant d'AbstractTypeExtension */
-            $visitor = new class extends NodeVisitorAbstract {
+            $visitor = new class () extends NodeVisitorAbstract {
                 /** @var list<array{class: string, line: int, hasPriority: bool}> */
                 public array $extensions = [];
 

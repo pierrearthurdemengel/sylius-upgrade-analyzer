@@ -161,6 +161,7 @@ final class ReportUploader
 
         return [
             'meta' => [
+                'project_name' => $report->getProjectName(),
                 'version' => $report->getDetectedSyliusVersion(),
                 'target_version' => $report->getTargetVersion(),
                 'analysis_duration_seconds' => $durationSeconds,
