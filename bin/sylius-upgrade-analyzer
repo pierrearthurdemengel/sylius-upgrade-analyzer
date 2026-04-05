@@ -73,11 +73,20 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyz
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\CompareCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\HistoryCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\MultiAnalyzeCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\UploadCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\WebhookCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\CsvReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\MarkdownReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportLoader;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportUploader;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\SarifReporter;
 use Symfony\Component\Console\Application;
 use Symfony\Component\HttpClient\HttpClient;
@@ -155,14 +164,26 @@ $analyzers = [
 ];
 
 /* Construction de la liste des reporters */
+$jsonReporter = new JsonReporter();
 $reporters = [
     new ConsoleReporter(),
-    new JsonReporter(),
+    $jsonReporter,
     new SarifReporter(),
     new MarkdownReporter(),
+    new CsvReporter(),
 ];
 
-$application = new Application('sylius-upgrade-analyzer', '1.1.0');
+/* Client API centralisé pour les services distants */
+$apiClient = new ApiClient($httpClient);
+$reportUploader = new ReportUploader($httpClient);
+$reportLoader = new ReportLoader();
+
+$application = new Application('sylius-upgrade-analyzer', '1.2.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters));
+$application->add(new UploadCommand($reportUploader));
+$application->add(new MultiAnalyzeCommand($analyzers, $apiClient, $jsonReporter));
+$application->add(new CompareCommand($reportLoader, $apiClient));
+$application->add(new HistoryCommand($apiClient));
+$application->add(new WebhookCommand($apiClient));
 $application->setDefaultCommand('sylius-upgrade:analyze');
 $application->run();

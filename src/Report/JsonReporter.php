@@ -58,10 +58,11 @@ final class JsonReporter implements ReporterInterface
 
     /**
      * Construit la structure de donnees complete du rapport.
+     * Publique pour permettre la réutilisation par les commandes multi-projets.
      *
      * @return array<string, mixed>
      */
-    private function buildReportData(MigrationReport $report): array
+    public function buildReportData(MigrationReport $report): array
     {
         return [
             'meta' => $this->buildMeta($report),
@@ -86,6 +87,7 @@ final class JsonReporter implements ReporterInterface
         }
 
         return [
+            'project_name' => $report->getProjectName(),
             'version' => $report->getDetectedSyliusVersion(),
             'target_version' => $report->getTargetVersion(),
             'analysis_duration_seconds' => $durationSeconds,

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
+use PhpParser\Node;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
+use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
-use PhpParser\Node;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\ParserFactory;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Yaml\Yaml;
 
@@ -204,7 +204,7 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
             }
 
             /* Visiteur pour detecter les appels a findOneByHostname */
-            $visitor = new class extends NodeVisitorAbstract {
+            $visitor = new class () extends NodeVisitorAbstract {
                 /** @var list<array{line: int}> */
                 public array $usages = [];
 
@@ -299,7 +299,7 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
             }
 
             /* Visiteur pour detecter les implementations de contextes de locale/canal */
-            $visitor = new class extends NodeVisitorAbstract {
+            $visitor = new class () extends NodeVisitorAbstract {
                 /** @var list<array{class: string, interface: string, line: int}> */
                 public array $contexts = [];
 

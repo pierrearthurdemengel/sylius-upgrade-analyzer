@@ -16,7 +16,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ReporterInterface;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -83,7 +82,7 @@ final class AnalyzeCommandTest extends TestCase
     public function testExecuteOnComplexProjectReturnsOne(): void
     {
         /* Création d'un analyseur factice qui génère un problème BREAKING */
-        $breakingAnalyzer = new class implements AnalyzerInterface {
+        $breakingAnalyzer = new class () implements AnalyzerInterface {
             public function analyze(MigrationReport $report): void
             {
                 $report->addIssue(new MigrationIssue(

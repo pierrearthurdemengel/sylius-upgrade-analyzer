@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\AutoFix;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
-use Symfony\Component\Finder\Finder;
 
 /**
  * Fixer pour le renommage des handlers de commandes.

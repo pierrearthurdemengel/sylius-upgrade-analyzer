@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\Report;
 
-use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -17,16 +16,16 @@ use Symfony\Component\Console\Output\OutputInterface;
 final class SarifReporter implements ReporterInterface
 {
     /** URL du schéma SARIF 2.1.0 */
-    private const string SARIF_SCHEMA = 'https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json';
+    private const SARIF_SCHEMA = 'https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json';
 
     /** Version du schéma SARIF */
-    private const string SARIF_VERSION = '2.1.0';
+    private const SARIF_VERSION = '2.1.0';
 
     /** Nom de l'outil */
-    private const string TOOL_NAME = 'sylius-upgrade-analyzer';
+    private const TOOL_NAME = 'sylius-upgrade-analyzer';
 
     /** Version de l'outil */
-    private const string TOOL_VERSION = '1.0.0';
+    private const TOOL_VERSION = '1.0.0';
 
     public function getFormat(): string
     {

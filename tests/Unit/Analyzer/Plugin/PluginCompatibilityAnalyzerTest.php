@@ -9,8 +9,6 @@ use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient;
-use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PluginCompatibility;
-use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PluginCompatibilityStatus;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
