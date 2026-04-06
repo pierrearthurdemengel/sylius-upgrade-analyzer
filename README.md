@@ -100,7 +100,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
 - **PDF** -- Professional report for stakeholders (via `--pdf` flag)
 
-### 12 Auto-Fixers
+### 41 Auto-Fixers
 
 | Fixer | Confidence | What it fixes |
 |-------|:----------:|---------------|
@@ -116,6 +116,33 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | Sonata Block Event Fixer | MEDIUM | Replaces `sonata_block_render_event()` / `sylius_template_event()` with `hook()` |
 | Grid Filter Entity Fixer | HIGH | Replaces `type: entities` with `type: entity` in grid YAML |
 | Use Webpack Config Fixer | HIGH | Removes `use_webpack` from `sylius_ui` YAML config and Twig conditionals |
+| Calendar to Clock Fixer | HIGH | Replaces `DateTimeProviderInterface` → `ClockInterface`, `sylius/calendar` → `symfony/clock` |
+| Class Move Fixer | HIGH | Updates 9 moved FQCN references between Sylius bundles |
+| Removed Class Fixer | MEDIUM | Comments out `use` statements for 150+ removed classes with TODO markers |
+| Bundle Config Fixer | HIGH | Removes 7 deprecated bundles and adds 5 required new bundles in `bundles.php` |
+| Deprecated Bundle Package Fixer | HIGH | Removes 6 deprecated packages from `composer.json` |
+| User Encoder Fixer | HIGH | YAML: `encoders` → `password_hashers` + algorithm; PHP: `getSalt()` → `return null` |
+| API Endpoint Restructure Fixer | HIGH | Replaces 3 restructured API endpoint paths |
+| Removed Route Fixer | MEDIUM | Comments removed route references in PHP and Twig with TODO markers |
+| Payment Request Env Fixer | HIGH | Adds 2 required Messenger transport env vars to `.env` |
+| Routing Import Fixer | HIGH | Replaces 7 old routing imports and parameter names |
+| Removed Config Key Fixer | HIGH | Comments 7 removed YAML config keys with TODO markers |
+| Translation Key Fixer | MEDIUM | Replaces 5 renamed translation key prefixes (`sylius.ui.admin` → `sylius.admin`, etc.) |
+| Behat Context Fixer | MEDIUM | Renames deprecated Behat context classes |
+| API Serialization Group Fixer | MEDIUM | Adds `sylius:` prefix to 4 serialization group pairs |
+| API Query Extension Signature Fixer | MEDIUM | Updates `$operationName` → `Operation $operation` parameter + use statement |
+| Form Type Extension Priority Fixer | MEDIUM | Adds `getPriority()` method when `getExtendedTypes()` exists |
+| Order Processor Priority Fixer | MEDIUM | Adds `priority` in YAML tags + `getPriority()` in PHP |
+| Deprecated Email Manager Fixer | MEDIUM | Replaces 4 deprecated email manager interface FQCNs |
+| Admin Menu Event Fixer | MEDIUM | Replaces 3 old admin menu event names |
+| Service Decorator Fixer | MEDIUM | Updates `decorates:` with renamed controller service prefixes |
+| Removed Payment Gateway Fixer | MEDIUM | Comments `stripe_checkout` and `paypal_express_checkout` configs |
+| Shipping Calculator Fixer | MEDIUM | Replaces `DelegatingCalculatorInterface` → `CalculatorInterface` |
+| Promotion Rule Checker Fixer | MEDIUM | Moves `CartQuantityRuleChecker` from Promotion to Core namespace |
+| Payum Config Fixer | MEDIUM | Comments `payum:` YAML root key and Payum `use` statements in PHP |
+| Grid Customization Fixer | MEDIUM | Replaces `field:` → `fields:` + `doctrine/orm` → `doctrine_orm` |
+| Resource Bundle Fixer | MEDIUM | Replaces `doctrine/orm` driver format, comments PHPCR/MongoDB drivers |
+| API Platform Migration Fixer | MEDIUM | Updates 7 namespace replacements (Core → Metadata/Symfony) + annotation → attribute |
 
 ### GitHub Action
 
