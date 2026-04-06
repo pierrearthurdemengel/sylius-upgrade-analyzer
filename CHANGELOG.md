@@ -7,6 +7,44 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-06
+
+### Added
+- 29 nouveaux fixers automatiques (total : 41 fixers) couvrant tous les cas automatisables :
+  - **Haute confiance (11)** :
+    - CalendarToClockFixer : DateTimeProviderInterface → ClockInterface, sylius/calendar → symfony/clock
+    - ClassMoveFixer : 9 FQCN déplacés entre bundles
+    - BundleConfigFixer : suppression de 7 bundles + ajout de 5 nouveaux dans bundles.php
+    - DeprecatedBundlePackageFixer : suppression de 6 packages dans composer.json
+    - UserEncoderFixer : encoders → password_hashers en YAML, getSalt() → return null en PHP
+    - ApiEndpointRestructureFixer : 3 chemins d'endpoint API mis à jour
+    - PaymentRequestEnvFixer : ajout de 2 variables d'env Messenger manquantes
+    - RoutingImportFixer : 7 imports de routing et paramètres renommés
+    - RemovedConfigKeyFixer : commentaire de 7 clés de configuration supprimées
+    - RemovedRouteFixer : commentaire des routes supprimées en PHP et Twig
+    - RemovedClassFixer : commentaire des use statements de classes supprimées
+  - **Confiance moyenne (18)** :
+    - TranslationKeyFixer : 5 préfixes de clés de traduction renommés
+    - BehatContextFixer : renommage des contextes Behat dépréciés
+    - ApiSerializationGroupFixer : ajout du préfixe sylius: sur les groupes de sérialisation
+    - ApiQueryExtensionSignatureFixer : $operationName → Operation $operation
+    - FormTypeExtensionPriorityFixer : ajout de getPriority() manquant
+    - OrderProcessorPriorityFixer : ajout de priority dans les tags YAML
+    - DeprecatedEmailManagerFixer : 4 FQCN d'interface déplacés
+    - AdminMenuEventFixer : 3 événements de menu admin renommés
+    - ServiceDecoratorFixer : préfixes de services renommés dans decorates:
+    - RemovedPaymentGatewayFixer : commentaire des gateways Stripe/PayPal supprimées
+    - ShippingCalculatorFixer : DelegatingCalculatorInterface → CalculatorInterface
+    - PromotionRuleCheckerFixer : CartQuantityRuleChecker déplacé vers Core
+    - PayumConfigFixer : commentaire de la config Payum en YAML et PHP
+    - GridCustomizationFixer : field: → fields: + doctrine/orm → doctrine_orm
+    - ResourceBundleFixer : format driver doctrine/orm → doctrine_orm, PHPCR/MongoDB commentés
+    - ApiPlatformMigrationFixer : 7 remplacements de namespace Core → Metadata/Symfony
+
+### Changed
+- Version bumped de 1.3.0 à 1.4.0
+- 665 tests, 1815 assertions
+
 ## [1.3.0] - 2026-04-06
 
 ### Added

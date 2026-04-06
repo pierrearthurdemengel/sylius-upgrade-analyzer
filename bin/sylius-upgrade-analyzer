@@ -72,18 +72,45 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\AdminMenuEventFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ApiEndpointRestructureFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ApiPlatformMigrationFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ApiQueryExtensionSignatureFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ApiSerializationGroupFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\BehatContextFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\BundleConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\CalendarToClockFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ClassMoveFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\CommandHandlerFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\DeprecatedBundlePackageFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\DeprecatedEmailManagerFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FormTypeExtensionPriorityFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\GridCustomizationFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\GridFilterEntityFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\LiipImagineConfigFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\MessageBusFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\OrderProcessorPriorityFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\PaymentRequestEnvFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\PayumConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\PromotionRuleCheckerFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RemovedClassFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RemovedConfigKeyFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RemovedPaymentGatewayFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RemovedRouteFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RenamedServiceIdFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ResourceBundleFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RoutingImportFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SecurityConfigFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SecurityFirewallFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ServiceDecoratorFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ShippingCalculatorFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SonataBlockEventFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SwiftMailerFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\TranslationKeyFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\TwigHookFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UseWebpackConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UserEncoderFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\WorkflowMigrationFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\CompareCommand;
@@ -188,6 +215,7 @@ $reporters = [
 
 /* Construction du moteur de correctifs automatiques */
 $fixers = [
+    /* Fixers existants */
     new TwigHookFixer(),
     new WorkflowMigrationFixer(),
     new MessageBusFixer(),
@@ -200,6 +228,37 @@ $fixers = [
     new SonataBlockEventFixer(),
     new GridFilterEntityFixer(),
     new UseWebpackConfigFixer(),
+
+    /* Fixers v1.4.0 — haute confiance */
+    new CalendarToClockFixer(),
+    new ClassMoveFixer(),
+    new RemovedClassFixer(),
+    new BundleConfigFixer(),
+    new DeprecatedBundlePackageFixer(),
+    new UserEncoderFixer(),
+    new ApiEndpointRestructureFixer(),
+    new RemovedRouteFixer(),
+    new PaymentRequestEnvFixer(),
+    new RoutingImportFixer(),
+    new RemovedConfigKeyFixer(),
+
+    /* Fixers v1.4.0 — confiance moyenne */
+    new TranslationKeyFixer(),
+    new BehatContextFixer(),
+    new ApiSerializationGroupFixer(),
+    new ApiQueryExtensionSignatureFixer(),
+    new FormTypeExtensionPriorityFixer(),
+    new OrderProcessorPriorityFixer(),
+    new DeprecatedEmailManagerFixer(),
+    new AdminMenuEventFixer(),
+    new ServiceDecoratorFixer(),
+    new RemovedPaymentGatewayFixer(),
+    new ShippingCalculatorFixer(),
+    new PromotionRuleCheckerFixer(),
+    new PayumConfigFixer(),
+    new GridCustomizationFixer(),
+    new ResourceBundleFixer(),
+    new ApiPlatformMigrationFixer(),
 ];
 $fixEngine = new FixEngine($fixers);
 
@@ -208,7 +267,7 @@ $apiClient = new ApiClient($httpClient);
 $reportUploader = new ReportUploader($httpClient);
 $reportLoader = new ReportLoader();
 
-$application = new Application('sylius-upgrade-analyzer', '1.3.0');
+$application = new Application('sylius-upgrade-analyzer', '1.4.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
 $application->add(new UploadCommand($reportUploader));
 $application->add(new MultiAnalyzeCommand($analyzers, $apiClient, $jsonReporter));
