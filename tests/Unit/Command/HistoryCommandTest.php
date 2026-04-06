@@ -7,8 +7,6 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Command;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\HistoryCommand;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\LicenseExpiredException;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\ServiceUnavailableException;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;

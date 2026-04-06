@@ -7,6 +7,24 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-06
+
+### Added
+- 7 nouveaux fixers automatiques (total : 12 fixers) :
+  - SwiftMailerFixer : Swift_Message → Email, Swift_Attachment → DataPart, config YAML (HIGH)
+  - RenamedServiceIdFixer : 11 service IDs + 2 préfixes renommés dans YAML (HIGH)
+  - SecurityFirewallFixer : new_api_admin_user → api_admin, new_api_shop_user → api_shop (HIGH)
+  - LiipImagineConfigFixer : resolver/loader "default" → "sylius_image" (HIGH)
+  - SonataBlockEventFixer : sonata_block_render_event() / sylius_template_event() → hook() (MEDIUM)
+  - GridFilterEntityFixer : type entities → entity dans les grilles YAML (HIGH)
+  - UseWebpackConfigFixer : suppression de use_webpack des YAML et Twig (HIGH)
+- Intégration FixEngine dans AnalyzeCommand avec options `--fix` et `--dry-run`
+- Les 5 fixers existants (TwigHook, Workflow, Security, MessageBus, CommandHandler) sont désormais câblés dans le binaire CLI
+
+### Changed
+- Version bumped de 1.2.0 à 1.3.0
+- 558 tests, 1540 assertions
+
 ## [1.2.0] - 2026-04-05
 
 ### Added

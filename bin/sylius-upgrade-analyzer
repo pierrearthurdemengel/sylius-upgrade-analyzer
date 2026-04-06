@@ -72,6 +72,19 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\CommandHandlerFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\GridFilterEntityFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\LiipImagineConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\MessageBusFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RenamedServiceIdFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SecurityConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SecurityFirewallFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SonataBlockEventFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SwiftMailerFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\TwigHookFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UseWebpackConfigFixer;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\WorkflowMigrationFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\CompareCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\HistoryCommand;
@@ -173,13 +186,30 @@ $reporters = [
     new CsvReporter(),
 ];
 
+/* Construction du moteur de correctifs automatiques */
+$fixers = [
+    new TwigHookFixer(),
+    new WorkflowMigrationFixer(),
+    new MessageBusFixer(),
+    new SecurityConfigFixer(),
+    new CommandHandlerFixer(),
+    new SwiftMailerFixer(),
+    new RenamedServiceIdFixer(),
+    new SecurityFirewallFixer(),
+    new LiipImagineConfigFixer(),
+    new SonataBlockEventFixer(),
+    new GridFilterEntityFixer(),
+    new UseWebpackConfigFixer(),
+];
+$fixEngine = new FixEngine($fixers);
+
 /* Client API centralisé pour les services distants */
 $apiClient = new ApiClient($httpClient);
 $reportUploader = new ReportUploader($httpClient);
 $reportLoader = new ReportLoader();
 
-$application = new Application('sylius-upgrade-analyzer', '1.2.0');
-$application->add(new AnalyzeCommand($analyzers, $reporters));
+$application = new Application('sylius-upgrade-analyzer', '1.3.0');
+$application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
 $application->add(new UploadCommand($reportUploader));
 $application->add(new MultiAnalyzeCommand($analyzers, $apiClient, $jsonReporter));
 $application->add(new CompareCommand($reportLoader, $apiClient));

@@ -100,15 +100,22 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
 - **PDF** -- Professional report for stakeholders (via `--pdf` flag)
 
-### 5 Auto-Fixers
+### 12 Auto-Fixers
 
-| Fixer | What it fixes |
-|-------|---------------|
-| Twig Hook Fixer | Generates `sylius_twig_hooks` YAML config for template overrides |
-| Workflow Migration Fixer | Converts winzou state machine YAML to Symfony Workflow config |
-| Security Config Fixer | Replaces `security.encoders` with `security.password_hashers` and simplifies `getSalt()` |
-| Message Bus Fixer | Renames bus references in YAML and PHP files |
-| Command Handler Fixer | Updates namespaces from `Message\` to `Command\` |
+| Fixer | Confidence | What it fixes |
+|-------|:----------:|---------------|
+| Twig Hook Fixer | HIGH | Generates `sylius_twig_hooks` YAML config for template overrides |
+| Workflow Migration Fixer | MEDIUM | Converts winzou state machine YAML to Symfony Workflow config |
+| Security Config Fixer | HIGH | Replaces `security.encoders` with `security.password_hashers` and simplifies `getSalt()` |
+| Message Bus Fixer | HIGH | Renames bus references in YAML and PHP files |
+| Command Handler Fixer | HIGH | Updates namespaces from `Message\` to `Command\` |
+| SwiftMailer Fixer | HIGH | Converts `Swift_Message` to `Email`, `Swift_Attachment` to `DataPart`, updates YAML config |
+| Renamed Service ID Fixer | HIGH | Replaces 11 old Sylius service IDs + 2 prefix renames in YAML |
+| Security Firewall Fixer | HIGH | Renames `new_api_admin_user` → `api_admin`, `new_api_shop_user` → `api_shop` |
+| LiipImagine Config Fixer | HIGH | Replaces resolver/loader `"default"` with `"sylius_image"` |
+| Sonata Block Event Fixer | MEDIUM | Replaces `sonata_block_render_event()` / `sylius_template_event()` with `hook()` |
+| Grid Filter Entity Fixer | HIGH | Replaces `type: entities` with `type: entity` in grid YAML |
+| Use Webpack Config Fixer | HIGH | Removes `use_webpack` from `sylius_ui` YAML config and Twig conditionals |
 
 ### GitHub Action
 

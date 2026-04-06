@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -35,10 +36,11 @@ final class AnalyzeCommand extends Command
     private readonly array $reporters;
 
     /**
-     * @param iterable<AnalyzerInterface>  $analyzers Liste des analyseurs disponibles
-     * @param iterable<ReporterInterface>  $reporters Liste des générateurs de rapports disponibles
+     * @param iterable<AnalyzerInterface>  $analyzers  Liste des analyseurs disponibles
+     * @param iterable<ReporterInterface>  $reporters  Liste des générateurs de rapports disponibles
+     * @param FixEngine|null               $fixEngine  Moteur de correctifs automatiques (optionnel)
      */
-    public function __construct(iterable $analyzers, iterable $reporters)
+    public function __construct(iterable $analyzers, iterable $reporters, private readonly ?FixEngine $fixEngine = null)
     {
         /* Conversion des itérables en tableaux indexés */
         $analyzerList = [];
@@ -246,6 +248,12 @@ final class AnalyzeCommand extends Command
 
         $reporter->generate($report, $output, $context);
 
+        /* Application des correctifs automatiques si demandé */
+        $wantsFix = $input->getOption('fix') || $input->getOption('dry-run');
+        if ($wantsFix && $this->fixEngine !== null) {
+            $this->runFixEngine($report, $projectPath, $input, $io);
+        }
+
         /* Code de sortie : 1 si des problèmes BREAKING existent, 0 sinon */
         $hasBreakingIssues = count($report->getIssuesBySeverity(Severity::BREAKING)) > 0;
 
@@ -368,5 +376,61 @@ final class AnalyzeCommand extends Command
         }
 
         return basename($projectPath);
+    }
+
+    /**
+     * Exécute le moteur de correctifs automatiques sur le rapport.
+     * En mode --dry-run, affiche les correctifs sans les appliquer.
+     * En mode --fix, applique les correctifs après confirmation.
+     */
+    private function runFixEngine(MigrationReport $report, string $projectPath, InputInterface $input, SymfonyStyle $io): void
+    {
+        if ($this->fixEngine === null) {
+            return;
+        }
+
+        $fixes = $this->fixEngine->generateFixes($report, $projectPath);
+
+        if ($fixes === []) {
+            $io->text('Aucun correctif automatique disponible pour les issues détectées.');
+
+            return;
+        }
+
+        $io->newLine();
+        $io->section(sprintf('Correctifs automatiques disponibles : %d', count($fixes)));
+
+        foreach ($fixes as $i => $fix) {
+            $io->text(sprintf(
+                '  <info>[%d]</info> [%s] %s',
+                $i + 1,
+                $fix->confidence->value,
+                $fix->description,
+            ));
+        }
+
+        /* Mode dry-run : affiche le patch unifié sans appliquer */
+        if ($input->getOption('dry-run')) {
+            $io->newLine();
+            $io->text('<comment>Mode dry-run : aucune modification appliquée.</comment>');
+            $io->newLine();
+            $patch = $this->fixEngine->generatePatch($fixes);
+            if ($patch !== '') {
+                $io->text($patch);
+            }
+
+            return;
+        }
+
+        /* Mode fix : applique les correctifs */
+        $io->newLine();
+        $applied = 0;
+
+        foreach ($fixes as $fix) {
+            $this->fixEngine->applyFix($fix);
+            $applied++;
+        }
+
+        $io->success(sprintf('%d correctif(s) appliqué(s).', $applied));
     }
 }
