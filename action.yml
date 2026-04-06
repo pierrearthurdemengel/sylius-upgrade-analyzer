@@ -1,0 +1,84 @@
+name: 'Sylius Upgrade Analyzer'
+description: 'Analyse un projet Sylius 1.x et detecte les problemes de migration vers 2.x'
+author: 'Pierre-Arthur Demengel'
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  project-path:
+    description: 'Chemin du projet a analyser'
+    required: false
+    default: '.'
+  target-version:
+    description: 'Version Sylius cible'
+    required: false
+    default: '2.2'
+  fail-on-breaking:
+    description: 'Echouer si des issues BREAKING sont detectees'
+    required: false
+    default: 'true'
+  upload-sarif:
+    description: 'Uploader le rapport SARIF sur GitHub Code Scanning'
+    required: false
+    default: 'false'
+  post-pr-comment:
+    description: 'Poster un commentaire sur la PR avec le resume'
+    required: false
+    default: 'false'
+
+outputs:
+  complexity:
+    description: 'Niveau de complexite detecte'
+  total-hours:
+    description: 'Heures estimees totales'
+  breaking-count:
+    description: 'Nombre d issues BREAKING'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+    - name: Install analyzer
+      shell: bash
+      run: composer require --dev pierre-arthur/sylius-upgrade-analyzer --no-interaction
+      working-directory: ${{ inputs.project-path }}
+    - name: Run analysis
+      id: analyze
+      shell: bash
+      run: |
+        vendor/bin/sylius-upgrade-analyzer analyse ${{ inputs.project-path }} --format=json --output=sylius-upgrade-report.json --no-marketplace
+        echo "complexity=$(jq -r '.summary.complexity' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
+        echo "total-hours=$(jq -r '.summary.total_hours' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
+        echo "breaking-count=$(jq -r '.summary.breaking_count' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
+      working-directory: ${{ inputs.project-path }}
+    - name: Generate SARIF
+      if: inputs.upload-sarif == 'true'
+      shell: bash
+      run: vendor/bin/sylius-upgrade-analyzer analyse ${{ inputs.project-path }} --format=sarif --output=sylius-upgrade.sarif --no-marketplace
+      working-directory: ${{ inputs.project-path }}
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.project-path }}/sylius-upgrade.sarif
+    - name: Post PR comment
+      if: inputs.post-pr-comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        node ${{ github.action_path }}/action/post-comment.js
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        REPORT_FILE: ${{ inputs.project-path }}/sylius-upgrade-report.json
+    - name: Check for breaking issues
+      if: inputs.fail-on-breaking == 'true'
+      shell: bash
+      run: |
+        BREAKING=$(jq -r '.summary.breaking_count' ${{ inputs.project-path }}/sylius-upgrade-report.json)
+        if [ "$BREAKING" != "0" ]; then
+          echo "::error::$BREAKING breaking issues detected"
+          exit 1
+        fi
