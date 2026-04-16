@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Deprecation;
+namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Frontend;
 
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UseWebpackConfigAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\UseWebpackConfigAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;

@@ -60,7 +60,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ShippingCalculatorAn
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SonataBlockEventAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\TranslationKeyAnalyzer;
-use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UseWebpackConfigAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\UseWebpackConfigAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserEncoderAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserModelFieldAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PhpNodeVersionAnalyzer;

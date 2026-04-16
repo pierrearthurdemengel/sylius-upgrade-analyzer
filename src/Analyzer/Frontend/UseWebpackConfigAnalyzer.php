@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
+namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;

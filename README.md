@@ -20,7 +20,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 
 ### 49 Built-in Analyzers
 
-#### Templates & Frontend (5)
+#### Templates & Frontend (6)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
@@ -29,40 +29,40 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 3 | Semantic UI | Semantic UI CSS classes in templates (removed in 2.x) |
 | 4 | jQuery | jQuery / Semantic UI JS usage in assets |
 | 5 | Webpack Encore | `webpack.config.js` + `@symfony/webpack-encore` detection |
+| 6 | Use Webpack Config | Removed `use_webpack` from `sylius_ui` config |
 
-#### Deprecations & Breaking Changes (36)
+#### Deprecations & Breaking Changes (35)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
-| 6 | Winzou State Machine | winzou/state-machine-bundle to Symfony Workflow |
-| 7 | SwiftMailer | swiftmailer/swiftmailer to symfony/mailer |
-| 8 | User Encoder | `security.encoders` and `getSalt()` methods |
-| 9 | Payum | Payum gateway to Payment Requests |
-| 10 | Message Bus Rename | `sylius_default.bus` / `sylius_event.bus` renames |
-| 11 | Command Handler Rename | `src/Message/` to `src/Command/` |
-| 12 | Deprecated Email Manager | Removed OrderEmailManager / ContactEmailManager |
-| 13 | Removed Payment Gateway | Stripe / PayPal Express removed from core |
-| 14 | Service Decorator | Decorators targeting renamed Sylius services |
-| 15 | Order Processor Priority | Priority conflicts (40-60 range) |
-| 16 | Form Type Extension Priority | Missing explicit priorities |
-| 17 | Behat Context Deprecation | 10+ deprecated Behat contexts |
-| 18 | Admin Menu Event | Event-based admin menu system changes |
-| 19 | Translation Key | Renamed `sylius.ui.*` / `sylius.form.*` / `sylius.email.*` keys |
-| 20 | Promotion Rule Checker | PromotionRuleCheckerInterface changes |
-| 21 | Shipping Calculator | CalculatorInterface changes |
-| 22 | Doctrine XML Mapping | `*.orm.xml` to PHP attribute migration |
-| 23 | Custom Fixture | Fixture system changes |
-| 24 | Multi-Store Channel | `findOneByHostname` deprecation, locale contexts |
-| 25 | Bundle Configuration | 7 removed bundles + 6 required new bundles in `bundles.php` |
-| 26 | Calendar to Clock | `sylius/calendar` to `symfony/clock` (`ClockInterface`) |
-| 27 | Security Firewall | `new_api_admin_user` / `new_api_shop_user` firewall renames |
-| 28 | User Model Field | Removed `locked`, `expiresAt`, `credentialsExpireAt`, `\Serializable` |
-| 29 | Removed Class | 150+ removed classes (Templating Helpers, UiBundle, DataCollectors, etc.) |
-| 30 | Renamed Service ID | 21 renamed/removed Sylius service IDs |
-| 31 | Removed Route | 43 removed admin/shop routes (partials, AJAX, etc.) |
-| 32 | LiipImagine Config | Resolver/loader `"default"` to `"sylius_image"` |
-| 33 | Constructor Signature | 24 classes with changed constructor signatures |
-| 34 | Use Webpack Config | Removed `use_webpack` from `sylius_ui` config |
+| 7 | Winzou State Machine | winzou/state-machine-bundle to Symfony Workflow |
+| 8 | SwiftMailer | swiftmailer/swiftmailer to symfony/mailer |
+| 9 | User Encoder | `security.encoders` and `getSalt()` methods |
+| 10 | Payum | Payum gateway to Payment Requests |
+| 11 | Message Bus Rename | `sylius_default.bus` / `sylius_event.bus` renames |
+| 12 | Command Handler Rename | `src/Message/` to `src/Command/` |
+| 13 | Deprecated Email Manager | Removed OrderEmailManager / ContactEmailManager |
+| 14 | Removed Payment Gateway | Stripe / PayPal Express removed from core |
+| 15 | Service Decorator | Decorators targeting renamed Sylius services |
+| 16 | Order Processor Priority | Priority conflicts (40-60 range) |
+| 17 | Form Type Extension Priority | Missing explicit priorities |
+| 18 | Behat Context Deprecation | 10+ deprecated Behat contexts |
+| 19 | Admin Menu Event | Event-based admin menu system changes |
+| 20 | Translation Key | Renamed `sylius.ui.*` / `sylius.form.*` / `sylius.email.*` keys |
+| 21 | Promotion Rule Checker | PromotionRuleCheckerInterface changes |
+| 22 | Shipping Calculator | CalculatorInterface changes |
+| 23 | Doctrine XML Mapping | `*.orm.xml` to PHP attribute migration |
+| 24 | Custom Fixture | Fixture system changes |
+| 25 | Multi-Store Channel | `findOneByHostname` deprecation, locale contexts |
+| 26 | Bundle Configuration | 7 removed bundles + 6 required new bundles in `bundles.php` |
+| 27 | Calendar to Clock | `sylius/calendar` to `symfony/clock` (`ClockInterface`) |
+| 28 | Security Firewall | `new_api_admin_user` / `new_api_shop_user` firewall renames |
+| 29 | User Model Field | Removed `locked`, `expiresAt`, `credentialsExpireAt`, `\Serializable` |
+| 30 | Removed Class | 150+ removed classes (Templating Helpers, UiBundle, DataCollectors, etc.) |
+| 31 | Renamed Service ID | 21 renamed/removed Sylius service IDs |
+| 32 | Removed Route | 43 removed admin/shop routes (partials, AJAX, etc.) |
+| 33 | LiipImagine Config | Resolver/loader `"default"` to `"sylius_image"` |
+| 34 | Constructor Signature | 24 classes with changed constructor signatures |
 | 35 | PHP Node Version | PHP 8.2+, Node.js 20+, Symfony 5.4 detection |
 | 36 | Class Move | 14 classes moved between bundles |
 | 37 | Service Visibility | Direct `$container->get('sylius.*')` calls (now private) |
