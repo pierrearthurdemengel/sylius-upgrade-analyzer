@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource;
 
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
@@ -33,22 +34,20 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
     /** URL de la documentation sur les ressources Sylius 2.x */
     private const DOC_URL = 'https://docs.sylius.com/en/latest/components_and_bundles/bundles/SyliusResourceBundle/index.html';
 
-    /** Interfaces de ressources recherchees dans le code source */
+    /**
+     * Interfaces de ressources recherchees, en noms pleinement qualifies.
+     * SyliusResourceBundle 1.11+ a deplace l'interface dans Sylius\Resource et garde
+     * l'ancien nom pour compatibilite : un projet 1.x peut utiliser l'un ou l'autre.
+     */
     private const RESOURCE_INTERFACES = [
-        'ResourceInterface',
         'Sylius\\Component\\Resource\\Model\\ResourceInterface',
+        'Sylius\\Resource\\Model\\ResourceInterface',
     ];
 
-    /** Interfaces de factory recherchees */
+    /** Interfaces de factory recherchees (ancien et nouvel espace de noms, cf. ci-dessus) */
     private const FACTORY_INTERFACES = [
-        'FactoryInterface',
         'Sylius\\Component\\Resource\\Factory\\FactoryInterface',
-    ];
-
-    /** Classes de repository Sylius */
-    private const REPOSITORY_CLASSES = [
-        'EntityRepository',
-        'Sylius\\Bundle\\ResourceBundle\\Doctrine\\ORM\\EntityRepository',
+        'Sylius\\Resource\\Factory\\FactoryInterface',
     ];
 
     /** Prefixes de services Sylius courants dans les surcharges */
@@ -156,9 +155,10 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
 
             $content = (string) file_get_contents($filePath);
 
+            /* Memes filtres textuels que l'analyse, pour ne pas ignorer un repository Sylius concret */
             if (str_contains($content, 'ResourceInterface')
                 || str_contains($content, 'FactoryInterface')
-                || str_contains($content, 'EntityRepository')
+                || (str_contains($content, 'Sylius') && str_contains($content, 'Repository'))
             ) {
                 return true;
             }
@@ -317,8 +317,11 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
 
             $code = (string) file_get_contents($filePath);
 
-            /* Filtre rapide */
-            if (!str_contains($code, 'EntityRepository')) {
+            /*
+             * Filtre rapide : un parent Sylius apparait en toutes lettres dans le
+             * fichier (use ou nom qualifie), meme lorsqu'il est importe sous alias.
+             */
+            if (!str_contains($code, 'Sylius') || !str_contains($code, 'Repository')) {
                 continue;
             }
 
@@ -332,16 +335,9 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            $repositoryClasses = self::REPOSITORY_CLASSES;
-
-            $visitor = new class ($repositoryClasses) extends NodeVisitorAbstract {
-                /** @var list<array{name: string, line: int}> */
+            $visitor = new class () extends NodeVisitorAbstract {
+                /** @var list<array{name: string, line: int, parent: string, parentShortName: string}> */
                 public array $repositories = [];
-
-                /** @param list<string> $targetClasses */
-                public function __construct(private readonly array $targetClasses)
-                {
-                }
 
                 public function enterNode(Node $node): null
                 {
@@ -353,29 +349,33 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                         return null;
                     }
 
-                    $className = $node->name?->toString() ?? 'anonyme';
+                    /* Nom pleinement qualifie, apres resolution des use et des alias */
                     $extendsName = $node->extends->toString();
 
-                    foreach ($this->targetClasses as $targetClass) {
-                        if ($extendsName === $targetClass
-                            || str_ends_with($extendsName, '\\' . $targetClass)
-                        ) {
-                            $this->repositories[] = [
-                                'name' => $className,
-                                'line' => $node->getStartLine(),
-                            ];
-
-                            return null;
-                        }
+                    /*
+                     * Tout parent de l'espace de noms Sylius dont le nom finit par Repository
+                     * est retenu : l'EntityRepository de SyliusResourceBundle et les
+                     * repositories concrets qui en heritent (CoreBundle ProductRepository...).
+                     * Une liste explicite serait a maintenir pour chaque version de Sylius,
+                     * alors que cette convention de nommage est stable. Le prefixe exclut
+                     * Doctrine\ORM\EntityRepository, qui ne depend pas de SyliusResourceBundle.
+                     */
+                    if (!str_starts_with($extendsName, 'Sylius\\') || !str_ends_with($extendsName, 'Repository')) {
+                        return null;
                     }
+
+                    $this->repositories[] = [
+                        'name' => $node->name?->toString() ?? 'anonyme',
+                        'line' => $node->getStartLine(),
+                        'parent' => $extendsName,
+                        'parentShortName' => $node->extends->getLast(),
+                    ];
 
                     return null;
                 }
             };
 
-            $traverser = new NodeTraverser();
-            $traverser->addVisitor($visitor);
-            $traverser->traverse($ast);
+            $this->traverseWithResolvedNames($ast, $visitor);
 
             foreach ($visitor->repositories as $repository) {
                 $report->addIssue(new MigrationIssue(
@@ -384,12 +384,14 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                     analyzer: $this->getName(),
                     message: sprintf('Repository personnalise detecte : %s', $repository['name']),
                     detail: sprintf(
-                        'La classe %s dans %s (ligne %d) etend EntityRepository de Sylius. '
+                        'La classe %s dans %s (ligne %d) etend %s de Sylius (%s). '
                         . 'Ce repository personnalise devra etre adapte pour la nouvelle couche '
                         . 'de persistance de Sylius 2.x.',
                         $repository['name'],
                         $file->getRelativePathname(),
                         $repository['line'],
+                        $repository['parentShortName'],
+                        $repository['parent'],
                     ),
                     suggestion: 'Adapter le repository personnalise pour la nouvelle API de '
                         . 'SyliusResourceBundle 2.x. Verifier les methodes de requete '
@@ -404,8 +406,11 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Analyse les fichiers YAML de services pour detecter les surcharges de services Sylius.
-     * Recherche les decorateurs et alias de services sylius.repository.*, sylius.factory.*, etc.
+     * Analyse les fichiers de services YAML et XML pour detecter les surcharges de services Sylius.
+     * Seules la redefinition d'un identifiant Sylius (y compris sous forme d'alias vers un
+     * service applicatif) et la decoration d'un service Sylius sont signalees : un service
+     * applicatif qui ne fait que referencer un service Sylius (app.x: '@sylius.repository.x')
+     * ne modifie pas le service natif et n'a donc rien a migrer de ce point de vue.
      */
     private function analyzeServiceOverrides(MigrationReport $report, string $projectPath): void
     {
@@ -415,7 +420,7 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
         }
 
         $finder = new Finder();
-        $finder->files()->in($configDir)->name('*.yaml')->name('*.yml');
+        $finder->files()->in($configDir)->name('*.yaml')->name('*.yml')->name('*.xml');
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -423,54 +428,11 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            try {
-                $config = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
-            } catch (\Throwable) {
-                continue;
-            }
+            $overriddenServiceIds = strtolower($file->getExtension()) === 'xml'
+                ? $this->findXmlServiceOverrides($filePath)
+                : $this->findYamlServiceOverrides($filePath);
 
-            if (!is_array($config)) {
-                continue;
-            }
-
-            $services = $config['services'] ?? [];
-            if (!is_array($services)) {
-                continue;
-            }
-
-            foreach ($services as $serviceId => $serviceDef) {
-                if (!is_string($serviceId)) {
-                    continue;
-                }
-
-                /* Detection des surcharges directes de services Sylius */
-                $isSyliusService = false;
-                foreach (self::SYLIUS_SERVICE_PREFIXES as $prefix) {
-                    if (str_starts_with($serviceId, $prefix)) {
-                        $isSyliusService = true;
-                        break;
-                    }
-                }
-
-                if (!$isSyliusService) {
-                    /* Detection des decorateurs de services Sylius */
-                    if (is_array($serviceDef)) {
-                        $decorates = $serviceDef['decorates'] ?? null;
-                        if (is_string($decorates)) {
-                            foreach (self::SYLIUS_SERVICE_PREFIXES as $prefix) {
-                                if (str_starts_with($decorates, $prefix)) {
-                                    $isSyliusService = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!$isSyliusService) {
-                    continue;
-                }
-
+            foreach ($overriddenServiceIds as $serviceId) {
                 $report->addIssue(new MigrationIssue(
                     severity: Severity::WARNING,
                     category: Category::RESOURCE,
@@ -492,6 +454,126 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                 ));
             }
         }
+    }
+
+    /**
+     * Retourne les identifiants des services d'un fichier YAML qui surchargent
+     * ou decorent un service Sylius.
+     *
+     * @return list<string>
+     */
+    private function findYamlServiceOverrides(string $filePath): array
+    {
+        try {
+            $config = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($config)) {
+            return [];
+        }
+
+        $services = $config['services'] ?? [];
+        if (!is_array($services)) {
+            return [];
+        }
+
+        $overrides = [];
+        foreach ($services as $serviceId => $serviceDef) {
+            if (!is_string($serviceId)) {
+                continue;
+            }
+
+            $decorates = is_array($serviceDef) ? ($serviceDef['decorates'] ?? null) : null;
+
+            if ($this->isSyliusServiceId($serviceId)
+                || (is_string($decorates) && $this->isSyliusServiceId($decorates))
+            ) {
+                $overrides[] = $serviceId;
+            }
+        }
+
+        return $overrides;
+    }
+
+    /**
+     * Retourne les identifiants des services d'un fichier XML (format du conteneur
+     * Symfony) qui surchargent ou decorent un service Sylius. Les fichiers XML
+     * invalides ou sans balise service (mappings Doctrine...) ne produisent rien.
+     *
+     * @return list<string>
+     */
+    private function findXmlServiceOverrides(string $filePath): array
+    {
+        $content = file_get_contents($filePath);
+        if ($content === false || !str_contains($content, '<service')) {
+            return [];
+        }
+
+        /*
+         * Les erreurs libxml sont collectees en interne pour qu'un fichier mal forme
+         * ne remonte pas en warning PHP ; LIBXML_NONET interdit tout acces reseau
+         * (DTD ou entites externes) pendant le chargement d'un fichier du projet audite.
+         */
+        $previousErrorMode = libxml_use_internal_errors(true);
+        $document = new \DOMDocument();
+        $loaded = $document->loadXML($content, \LIBXML_NONET);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previousErrorMode);
+
+        if (!$loaded) {
+            return [];
+        }
+
+        $overrides = [];
+        /*
+         * getElementsByTagName compare le nom qualifie : il trouve les balises service
+         * placees dans l'espace de noms par defaut http://symfony.com/schema/dic/services.
+         */
+        foreach ($document->getElementsByTagName('service') as $service) {
+            $serviceId = $service->getAttribute('id');
+            if ($serviceId === '') {
+                continue;
+            }
+
+            if ($this->isSyliusServiceId($serviceId)
+                || $this->isSyliusServiceId($service->getAttribute('decorates'))
+            ) {
+                $overrides[] = $serviceId;
+            }
+        }
+
+        return $overrides;
+    }
+
+    /**
+     * Indique si l'identifiant de service appartient a l'un des prefixes Sylius surveilles.
+     */
+    private function isSyliusServiceId(string $serviceId): bool
+    {
+        foreach (self::SYLIUS_SERVICE_PREFIXES as $prefix) {
+            if (str_starts_with($serviceId, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Parcourt l'AST apres resolution des noms : les clauses extends et implements
+     * contiennent alors des noms pleinement qualifies, quels que soient les use et
+     * alias du fichier (use ...\EntityRepository as BaseRepository).
+     *
+     * @param array<Node\Stmt> $ast
+     */
+    private function traverseWithResolvedNames(array $ast, NodeVisitorAbstract $visitor): void
+    {
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor(new NameResolver());
+        $traverser->addVisitor($visitor);
+        $traverser->traverse($ast);
     }
 
     /**
@@ -561,19 +643,19 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
 
                     $className = $node->name?->toString() ?? 'anonyme';
 
+                    /*
+                     * Comparaison exacte des noms pleinement qualifies : une interface
+                     * homonyme d'un autre espace de noms (App\Contract\ResourceInterface)
+                     * ne doit pas etre confondue avec celle de Sylius.
+                     */
                     foreach ($node->implements as $implement) {
-                        $implementName = $implement->toString();
-                        foreach ($this->targetInterfaces as $targetInterface) {
-                            if ($implementName === $targetInterface
-                                || str_ends_with($implementName, '\\' . $targetInterface)
-                            ) {
-                                $this->implementations[] = [
-                                    'name' => $className,
-                                    'line' => $node->getStartLine(),
-                                ];
+                        if (\in_array($implement->toString(), $this->targetInterfaces, true)) {
+                            $this->implementations[] = [
+                                'name' => $className,
+                                'line' => $node->getStartLine(),
+                            ];
 
-                                return null;
-                            }
+                            return null;
                         }
                     }
 
@@ -581,9 +663,7 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
                 }
             };
 
-            $traverser = new NodeTraverser();
-            $traverser->addVisitor($visitor);
-            $traverser->traverse($ast);
+            $this->traverseWithResolvedNames($ast, $visitor);
 
             foreach ($visitor->implementations as $implementation) {
                 $report->addIssue(new MigrationIssue(

@@ -713,4 +713,262 @@ final class ResourceBundleAnalyzerTest extends TestCase
 
         self::assertSame([], $report->getIssues());
     }
+
+    /**
+     * Verifie qu'un repository etendant l'EntityRepository de Sylius importe sous
+     * un alias (use ... as BaseRepository) est detecte : le nom ecrit dans
+     * extends ne ressemble plus au nom de la classe parente.
+     */
+    #[Test]
+    public function testDetectsRepositoryExtendingAliasedSyliusEntityRepository(): void
+    {
+        $this->writeProjectFile('src/Repository/BrandRepository.php', <<<'PHP'
+            <?php
+
+            namespace App\Repository;
+
+            use Sylius\Bundle\ResourceBundle\Doctrine\ORM\EntityRepository as BaseRepository;
+
+            class BrandRepository extends BaseRepository
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Repository personnalise detecte : BrandRepository');
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('(ligne 7) etend EntityRepository', $issues[0]->getDetail());
+    }
+
+    /**
+     * Verifie qu'un repository etendant l'EntityRepository de Doctrine n'est pas
+     * signale : seul le nom court est commun avec celui de Sylius, la classe ne
+     * depend pas de SyliusResourceBundle.
+     */
+    #[Test]
+    public function testIgnoresRepositoryExtendingDoctrineEntityRepository(): void
+    {
+        $this->writeProjectFile('src/Repository/AuditLogRepository.php', <<<'PHP'
+            <?php
+
+            namespace App\Repository;
+
+            use Doctrine\ORM\EntityRepository;
+
+            class AuditLogRepository extends EntityRepository
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'un repository etendant un repository concret de Sylius
+     * (cas le plus courant : ProductRepository, OrderRepository...) est detecte.
+     */
+    #[Test]
+    public function testDetectsRepositoryExtendingConcreteSyliusRepository(): void
+    {
+        $this->writeProjectFile('src/Repository/OrderRepository.php', <<<'PHP'
+            <?php
+
+            namespace App\Repository;
+
+            class OrderRepository extends \Sylius\Bundle\CoreBundle\Doctrine\ORM\OrderRepository
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Repository personnalise detecte : OrderRepository');
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('Sylius\Bundle\CoreBundle\Doctrine\ORM\OrderRepository', $issues[0]->getDetail());
+    }
+
+    /**
+     * Verifie que le ProductRepository du projet complexe, qui etend le
+     * ProductRepository de CoreBundle importe sous alias, est bien detecte.
+     */
+    #[Test]
+    public function testDetectsAliasedCoreRepositoryInComplexFixture(): void
+    {
+        $report = $this->createReportForFixture('project-complex');
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Repository personnalise detecte : ProductRepository'));
+    }
+
+    /**
+     * Verifie qu'une ressource implementant ResourceInterface importee sous alias
+     * est detectee.
+     */
+    #[Test]
+    public function testDetectsResourceInterfaceImplementedThroughAlias(): void
+    {
+        $this->writeProjectFile('src/Entity/Brand.php', <<<'PHP'
+            <?php
+
+            namespace App\Entity;
+
+            use Sylius\Component\Resource\Model\ResourceInterface as SyliusResource;
+
+            class Brand implements SyliusResource
+            {
+                public function getId(): ?int
+                {
+                    return null;
+                }
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Implementation de ressource personnalisee detectee : Brand'));
+    }
+
+    /**
+     * Verifie que les interfaces du nouvel espace de noms Sylius\Resource
+     * (SyliusResourceBundle 1.11+) sont detectees au meme titre que les anciennes.
+     */
+    #[Test]
+    public function testDetectsInterfacesFromNewSyliusResourceNamespace(): void
+    {
+        $this->writeProjectFile('src/Factory/BrandFactory.php', <<<'PHP'
+            <?php
+
+            namespace App\Factory;
+
+            use Sylius\Resource\Factory\FactoryInterface;
+            use Sylius\Resource\Model\ResourceInterface;
+
+            final class BrandFactory implements FactoryInterface
+            {
+            }
+
+            final class Brand implements ResourceInterface
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Implementation de factory personnalisee detectee : BrandFactory'));
+        self::assertCount(1, $this->issuesWithMessage($report, 'Implementation de ressource personnalisee detectee : Brand'));
+    }
+
+    /**
+     * Verifie qu'une interface applicative homonyme (ResourceInterface,
+     * FactoryInterface) n'est pas confondue avec celles de Sylius.
+     */
+    #[Test]
+    public function testIgnoresHomonymousInterfacesFromOtherNamespaces(): void
+    {
+        $this->writeProjectFile('src/Import/CsvImport.php', <<<'PHP'
+            <?php
+
+            namespace App\Import;
+
+            use App\Contract\ResourceInterface;
+            use Symfony\Component\Form\FormFactoryInterface as FactoryInterface;
+
+            final class CsvImport implements ResourceInterface, FactoryInterface
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'un identifiant de service Sylius redefini comme alias vers un
+     * service applicatif est signale (c'est une surcharge), alors qu'un service
+     * applicatif pointant vers un service Sylius ne l'est pas (simple reference).
+     */
+    #[Test]
+    public function testDetectsSyliusServiceRedefinedAsAliasButNotAppAliases(): void
+    {
+        $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                sylius.repository.product: '@App\Repository\ProductRepository'
+                sylius.factory.product:
+                    alias: App\Factory\ProductFactory
+                app.product_repository: '@sylius.repository.product'
+                app.product_factory:
+                    alias: sylius.factory.product
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $messages = array_map(static fn (MigrationIssue $issue): string => $issue->getMessage(), $report->getIssues());
+        self::assertSame([
+            'Surcharge de service Sylius detectee : sylius.repository.product',
+            'Surcharge de service Sylius detectee : sylius.factory.product',
+        ], $messages);
+    }
+
+    /**
+     * Verifie la detection des surcharges et decorateurs de services Sylius
+     * declares en XML, sans signaler les services applicatifs ni les alias
+     * applicatifs pointant vers un service Sylius.
+     */
+    #[Test]
+    public function testDetectsSyliusServiceOverridesInXmlServices(): void
+    {
+        $filePath = $this->writeProjectFile('config/services.xml', <<<'XML'
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <container xmlns="http://symfony.com/schema/dic/services"
+                       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                       xsi:schemaLocation="http://symfony.com/schema/dic/services https://symfony.com/schema/dic/services/services-1.0.xsd">
+                <services>
+                    <service id="sylius.repository.product" class="App\Repository\ProductRepository" />
+                    <service id="App\Factory\CustomerFactory" decorates="sylius.factory.customer">
+                        <argument type="service" id=".inner" />
+                    </service>
+                    <service id="App\Newsletter\Subscriber" />
+                    <service id="app.product_repository" alias="sylius.repository.product" />
+                </services>
+            </container>
+            XML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame('Surcharge de service Sylius detectee : sylius.repository.product', $issues[0]->getMessage());
+        self::assertSame('Surcharge de service Sylius detectee : App\Factory\CustomerFactory', $issues[1]->getMessage());
+        self::assertSame($filePath, $issues[0]->getFile());
+        self::assertSame(60, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie qu'un fichier XML invalide ou sans definition de service
+     * est ignore sans interrompre l'analyse.
+     */
+    #[Test]
+    public function testIgnoresInvalidOrUnrelatedXmlFiles(): void
+    {
+        $this->writeProjectFile('config/services.xml', "<container><services><service id=\"sylius.repository.product\"\n");
+        $this->writeProjectFile('config/doctrine/Brand.orm.xml', '<doctrine-mapping><entity name="App\Entity\Brand" /></doctrine-mapping>');
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
 }
