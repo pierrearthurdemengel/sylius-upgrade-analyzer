@@ -7,6 +7,7 @@
  * @var float $totalHours
  * @var \PierreArthur\SyliusUpgradeAnalyzer\Estimation\CostEstimate|null $totalCost
  * @var \DateTimeImmutable $generatedAt
+ * @var \PierreArthur\SyliusUpgradeAnalyzer\Report\MigrationServiceOffer|null $offer
  */
 
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -99,6 +100,10 @@ foreach ($projects as $project) {
         <?php endif ?>
     </div>
 <?php endforeach ?>
+
+<?php if ($offer !== null): ?>
+    <?= $this->partial('_service-offer.php', ['offer' => $offer]) ?>
+<?php endif ?>
 
 </body>
 </html>

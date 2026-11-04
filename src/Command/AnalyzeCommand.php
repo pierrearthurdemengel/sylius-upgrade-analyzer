@@ -10,6 +10,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\MigrationServiceOffer;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ReporterInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -154,6 +155,12 @@ final class AnalyzeCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Taux journalier moyen en euros : ajoute une estimation budgétaire au rapport PDF',
             )
+            ->addOption(
+                'no-promo',
+                null,
+                InputOption::VALUE_NONE,
+                'Ne pas afficher la mention d\'accompagnement a la migration en fin de rapport',
+            )
         ;
     }
 
@@ -246,6 +253,7 @@ final class AnalyzeCommand extends Command
         $context = [
             'output_file' => $input->getOption('output'),
             'tjm' => $dailyRate,
+            MigrationServiceOffer::CONTEXT_KEY => !$input->getOption('no-promo'),
         ];
 
         try {

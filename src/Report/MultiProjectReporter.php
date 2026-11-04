@@ -45,19 +45,29 @@ final class MultiProjectReporter
      * Sans fichier de sortie, les formats texte sont écrits sur la console ;
      * le PDF est alors écrit dans DEFAULT_PDF_FILE.
      *
+     * La mention d'accompagnement n'est ajoutee qu'aux formats lus par des humains
+     * (console, Markdown, PDF), jamais au JSON.
+     *
      * @param list<MigrationReport> $reports
-     * @param int|null              $dailyRate TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param int|null              $dailyRate        TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param bool                  $withServiceOffer Ajoute la mention d'accompagnement (false avec --no-promo)
      *
      * @throws \InvalidArgumentException Si le format n'est pas supporté
      * @throws PdfGenerationException    Si la génération PDF échoue
      */
-    public function generate(array $reports, string $format, OutputInterface $output, ?string $outputFile = null, ?int $dailyRate = null): void
-    {
+    public function generate(
+        array $reports,
+        string $format,
+        OutputInterface $output,
+        ?string $outputFile = null,
+        ?int $dailyRate = null,
+        bool $withServiceOffer = true,
+    ): void {
         match ($format) {
-            'console' => $this->renderConsole($reports, $output, $dailyRate),
+            'console' => $this->renderConsole($reports, $output, $dailyRate, $withServiceOffer),
             'json' => $this->writeText($this->buildJson($reports, $dailyRate), 'JSON', $output, $outputFile),
-            'markdown' => $this->writeText($this->buildMarkdown($reports, $dailyRate), 'Markdown', $output, $outputFile),
-            'pdf' => $this->writePdf($reports, $output, $outputFile, $dailyRate),
+            'markdown' => $this->writeText($this->buildMarkdown($reports, $dailyRate, $withServiceOffer), 'Markdown', $output, $outputFile),
+            'pdf' => $this->writePdf($reports, $output, $outputFile, $dailyRate, $withServiceOffer),
             default => throw new \InvalidArgumentException(sprintf(
                 'Format non supporté pour le rapport consolidé : %s (formats disponibles : %s)',
                 $format,
@@ -109,7 +119,7 @@ final class MultiProjectReporter
      *
      * @param list<MigrationReport> $reports
      */
-    public function buildMarkdown(array $reports, ?int $dailyRate = null): string
+    public function buildMarkdown(array $reports, ?int $dailyRate = null, bool $withServiceOffer = true): string
     {
         $withCost = $dailyRate !== null;
         $totals = $this->buildTotals($reports, $dailyRate);
@@ -158,6 +168,11 @@ final class MultiProjectReporter
             $lines[] = '';
         }
 
+        if ($withServiceOffer) {
+            $lines[] = (new MigrationServiceOffer())->markdownLine();
+            $lines[] = '';
+        }
+
         return implode("\n", $lines);
     }
 
@@ -166,7 +181,7 @@ final class MultiProjectReporter
      *
      * @param list<MigrationReport> $reports
      */
-    private function renderConsole(array $reports, OutputInterface $output, ?int $dailyRate): void
+    private function renderConsole(array $reports, OutputInterface $output, ?int $dailyRate, bool $withServiceOffer): void
     {
         $withCost = $dailyRate !== null;
         $headers = ['Projet', 'Version', 'Complexité', 'Risque', 'Bloquants', 'Problèmes', 'Heures'];
@@ -210,6 +225,12 @@ final class MultiProjectReporter
                 $dailyRate,
             ));
         }
+
+        $offerLine = $withServiceOffer ? (new MigrationServiceOffer())->consoleLine($totals['hours']) : null;
+        if ($offerLine !== null) {
+            $output->writeln('');
+            $output->writeln(sprintf('<comment>%s</comment>', $offerLine));
+        }
     }
 
     /**
@@ -217,10 +238,10 @@ final class MultiProjectReporter
      *
      * @throws PdfGenerationException
      */
-    private function writePdf(array $reports, OutputInterface $output, ?string $outputFile, ?int $dailyRate): void
+    private function writePdf(array $reports, OutputInterface $output, ?string $outputFile, ?int $dailyRate, bool $withServiceOffer): void
     {
         $outputFile ??= self::DEFAULT_PDF_FILE;
-        $pdf = $this->pdfRenderer->render($this->htmlBuilder->buildMultiProjectReport($reports, $dailyRate));
+        $pdf = $this->pdfRenderer->render($this->htmlBuilder->buildMultiProjectReport($reports, $dailyRate, $withServiceOffer));
 
         (new PdfReporter($this->htmlBuilder, $this->pdfRenderer))->write($outputFile, $pdf);
 

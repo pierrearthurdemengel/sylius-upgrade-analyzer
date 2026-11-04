@@ -86,6 +86,12 @@ final class MultiAnalyzeCommand extends Command
                 InputOption::VALUE_NONE,
                 'Désactiver la vérification de compatibilité via le marketplace',
             )
+            ->addOption(
+                'no-promo',
+                null,
+                InputOption::VALUE_NONE,
+                'Ne pas afficher la mention d\'accompagnement a la migration en fin de rapport',
+            )
         ;
     }
 
@@ -153,7 +159,7 @@ final class MultiAnalyzeCommand extends Command
         $this->disambiguateProjectNames($reports);
 
         try {
-            $this->reporter->generate($reports, $format, $output, $outputFile, $dailyRate);
+            $this->reporter->generate($reports, $format, $output, $outputFile, $dailyRate, !$input->getOption('no-promo'));
         } catch (PdfGenerationException $exception) {
             $io->error($exception->getMessage());
 

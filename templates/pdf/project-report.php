@@ -8,6 +8,7 @@
  * @var \PierreArthur\SyliusUpgradeAnalyzer\Estimation\CostEstimate|null $cost
  * @var list<\PierreArthur\SyliusUpgradeAnalyzer\Estimation\RoadmapStep> $roadmap
  * @var \DateTimeImmutable $generatedAt
+ * @var \PierreArthur\SyliusUpgradeAnalyzer\Report\MigrationServiceOffer|null $offer
  */
 
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -113,6 +114,10 @@ $suggestionIssues = $report->getIssuesBySeverity(Severity::SUGGESTION);
         <h2>Aucun problème détecté</h2>
         <p>Aucun des analyseurs n'a relevé de point de migration pour ce projet.</p>
     </div>
+<?php endif ?>
+
+<?php if ($offer !== null): ?>
+    <?= $this->partial('_service-offer.php', ['offer' => $offer]) ?>
 <?php endif ?>
 
 </body>
