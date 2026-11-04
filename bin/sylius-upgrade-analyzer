@@ -71,6 +71,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginAlternativeSuggester;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Security\PhpSecurityPatchAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\AdminMenuEventFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ApiEndpointRestructureFixer;
@@ -176,6 +177,7 @@ $analyzers = [
     new GridFilterEntityAnalyzer(),
     new UseWebpackConfigAnalyzer(),
     new PhpNodeVersionAnalyzer(),
+    new PhpSecurityPatchAnalyzer(),
     new ClassMoveAnalyzer(),
     new ServiceVisibilityAnalyzer(),
     new PaymentRequestEnvAnalyzer(),

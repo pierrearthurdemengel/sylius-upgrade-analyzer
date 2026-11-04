@@ -17,6 +17,9 @@ services:
     PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer:
         tags: ['sylius_upgrade.analyzer']
 
+    PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Security\PhpSecurityPatchAnalyzer:
+        tags: ['sylius_upgrade.analyzer']
+
     PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserEncoderAnalyzer:
         tags: ['sylius_upgrade.analyzer']
 

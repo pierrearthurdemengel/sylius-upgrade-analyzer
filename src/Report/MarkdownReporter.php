@@ -287,6 +287,7 @@ final class MarkdownReporter implements ReporterInterface
             Category::RESOURCE => 'Ressources',
             Category::FRONTEND => 'Frontend',
             Category::API => 'API',
+            Category::SECURITY => 'Sécurité',
         };
     }
 }
