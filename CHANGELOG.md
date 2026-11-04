@@ -7,6 +7,20 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-04
+
+### Added
+- Mention de l'offre d'accompagnement à la migration en fin de rapport console, Markdown et PDF (encart final). Les sorties JSON, SARIF et CSV n'en contiennent jamais
+- Option `--no-promo` sur `sylius-upgrade:analyze` et `sylius-upgrade:multi-analyze` pour retirer cette mention
+- `composer.json` : liens `homepage` et `support`, site de l'auteur
+
+### Changed
+- `composer.json` déclare l'extension `ext-dom`, utilisée pour lire les services XML
+
+### Fixed
+- `ResourceBundleAnalyzer` analyse aussi les projets dont la seule personnalisation est une surcharge de service Sylius (YAML ou XML)
+- `CustomFixtureAnalyzer` analyse aussi les fixtures Sylius placées hors de `src/DataFixtures/` sans configuration `sylius_fixtures`
+
 ## [2.1.0] - 2026-11-04
 
 Version consacrée à la fiabilité du diagnostic : chaque détection a été confrontée à UPGRADE-2.0.md
