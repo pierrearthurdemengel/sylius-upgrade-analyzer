@@ -23,7 +23,7 @@ interface ReporterInterface
     public function generate(MigrationReport $report, OutputInterface $output, array $context = []): void;
 
     /**
-     * Retourne l'identifiant du format de sortie (ex: 'console', 'json', 'pdf').
+     * Retourne l'identifiant du format de sortie (ex: 'console', 'json', 'sarif').
      */
     public function getFormat(): string;
 }

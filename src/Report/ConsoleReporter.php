@@ -238,8 +238,8 @@ final class ConsoleReporter implements ReporterInterface
         $io->section('Prochaines étapes');
 
         $io->text([
-            '  Pour générer un rapport PDF :',
-            '    <info>sylius-upgrade-analyzer sylius-upgrade:analyze --pdf</info>',
+            '  Pour partager le rapport (ticket, wiki, pull request) :',
+            '    <info>sylius-upgrade-analyzer sylius-upgrade:analyze --format=markdown --output=rapport.md</info>',
             '',
             '  Pour afficher tous les détails :',
             '    <info>sylius-upgrade-analyzer sylius-upgrade:analyze -vv</info>',

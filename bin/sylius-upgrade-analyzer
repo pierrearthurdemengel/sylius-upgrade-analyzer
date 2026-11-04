@@ -69,6 +69,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\JQueryAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\SemanticUiAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\WebpackEncoreAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Grid\GridCustomizationAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginAlternativeSuggester;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Plugin\PluginCompatibilityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
@@ -118,10 +119,8 @@ use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\MultiStoreChannelFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UserModelFieldFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\AnalyzeCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\CompareCommand;
-use PierreArthur\SyliusUpgradeAnalyzer\Command\HistoryCommand;
+use PierreArthur\SyliusUpgradeAnalyzer\Command\CompatibilityMatrixCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\MultiAnalyzeCommand;
-use PierreArthur\SyliusUpgradeAnalyzer\Command\UploadCommand;
-use PierreArthur\SyliusUpgradeAnalyzer\Command\WebhookCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
@@ -130,7 +129,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\Report\CsvReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\MarkdownReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportLoader;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportUploader;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\SarifReporter;
 use Symfony\Component\Console\Application;
 use Symfony\Component\HttpClient\HttpClient;
@@ -272,17 +270,18 @@ $fixers = [
 ];
 $fixEngine = new FixEngine($fixers);
 
-/* Client API centralisé pour les services distants */
+/* Client API utilisé par l'analyse multi-projets */
 $apiClient = new ApiClient($httpClient);
-$reportUploader = new ReportUploader($httpClient);
 $reportLoader = new ReportLoader();
 
 $application = new Application('sylius-upgrade-analyzer', '1.5.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
-$application->add(new UploadCommand($reportUploader));
 $application->add(new MultiAnalyzeCommand($analyzers, $apiClient, $jsonReporter));
-$application->add(new CompareCommand($reportLoader, $apiClient));
-$application->add(new HistoryCommand($apiClient));
-$application->add(new WebhookCommand($apiClient));
+$application->add(new CompareCommand($reportLoader));
+$application->add(new CompatibilityMatrixCommand(
+    new AddonsMarketplaceClient($httpClient),
+    new PackagistClient($httpClient),
+    new PluginAlternativeSuggester(__DIR__ . '/../data/plugin-alternatives.yaml'),
+));
 $application->setDefaultCommand('sylius-upgrade:analyze');
 $application->run();
