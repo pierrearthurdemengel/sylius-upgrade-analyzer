@@ -6,16 +6,16 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Deprecation;
 
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\FormTypeExtensionPriorityAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedFormTypeExtensionAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
 /**
- * Tests unitaires pour l'analyseur des extensions de types de formulaire.
- * Verifie la detection des extensions sans priorite explicite.
+ * Tests unitaires pour l'analyseur des extensions de formulaire supprimees par Sylius 2.0
+ * (classes heritees et references aux services retires).
  */
-final class FormTypeExtensionPriorityAnalyzerTest extends TestCase
+final class RemovedFormTypeExtensionAnalyzerTest extends TestCase
 {
     private string $tempDir;
 
@@ -68,7 +68,7 @@ final class FormTypeExtensionPriorityAnalyzerTest extends TestCase
     #[Test]
     public function testSupportsReturnsFalseWithoutSrcDir(): void
     {
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         self::assertFalse($analyzer->supports($report));
@@ -94,17 +94,18 @@ class CustomFormExtension extends AbstractTypeExtension
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         self::assertTrue($analyzer->supports($report));
     }
 
     /**
-     * Verifie la detection d'une extension sans priorite explicite.
+     * Verifie qu'une classe heritant d'une extension supprimee est bloquante (elle ne se charge
+     * plus) tandis que le resume global reste un avertissement.
      */
     #[Test]
-    public function testDetectsExtensionWithoutPriority(): void
+    public function testReportsInheritingClassAsBreakingAndSummaryAsWarning(): void
     {
         $srcDir = $this->tempDir . '/src';
         mkdir($srcDir, 0755, true);
@@ -113,54 +114,96 @@ PHP);
 
 namespace App\Form;
 
-use Symfony\Component\Form\AbstractTypeExtension;
+use Sylius\Bundle\CoreBundle\Form\Extension\LocaleTypeExtension;
 
-class CustomFormExtension extends AbstractTypeExtension
+class CustomFormExtension extends LocaleTypeExtension
 {
-    public function buildForm($builder, array $options): void {}
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
 
-        $extensionIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'CustomFormExtension'),
-        );
-        self::assertNotEmpty($extensionIssues);
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame(Severity::BREAKING, $issues[0]->getSeverity());
+        self::assertSame(Severity::WARNING, $issues[1]->getSeverity());
     }
 
     /**
-     * Verifie que les problemes sont de severite WARNING.
+     * Verifie qu'une extension heritant d'une extension Sylius supprimee en 2.0 est signalee,
+     * meme si elle declare getExtendedTypes() comme toute extension moderne.
      */
     #[Test]
-    public function testCreatesWarningIssues(): void
+    public function testDetectsExtensionInheritingRemovedSyliusExtension(): void
     {
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/CustomFormExtension.php', <<<'PHP'
+        $filePath = $this->writeFile('src/Form/Extension/CustomerTypeExtension.php', <<<'PHP'
 <?php
 
-namespace App\Form;
+namespace App\Form\Extension;
 
-use Symfony\Component\Form\AbstractTypeExtension;
+use Sylius\Bundle\CoreBundle\Form\Extension\CustomerTypeExtension as BaseCustomerTypeExtension;
+use Sylius\Bundle\CustomerBundle\Form\Type\CustomerType;
 
-class CustomFormExtension extends AbstractTypeExtension
+final class CustomerTypeExtension extends BaseCustomerTypeExtension
 {
+    public static function getExtendedTypes(): iterable
+    {
+        return [CustomerType::class];
+    }
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
+        $report = $this->createReport();
+
+        self::assertTrue($analyzer->supports($report));
+
+        $analyzer->analyze($report);
+
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame(
+            'Extension de formulaire "CustomerTypeExtension" heritant de '
+            . 'Sylius\Bundle\CoreBundle\Form\Extension\CustomerTypeExtension, supprimee dans Sylius 2.0',
+            $issues[0]->getMessage(),
+        );
+        self::assertSame(realpath($filePath), $issues[0]->getFile());
+        self::assertSame(8, $issues[0]->getLine());
+        self::assertSame(60, $issues[1]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie qu'une extension Symfony ordinaire n'est pas signalee : Sylius 2.0 n'impose
+     * aucune priorite aux extensions de formulaire du projet.
+     */
+    #[Test]
+    public function testIgnoresPlainSymfonyExtension(): void
+    {
+        $this->writeFile('src/Form/Extension/ProductTypeExtension.php', <<<'PHP'
+<?php
+
+namespace App\Form\Extension;
+
+use Symfony\Component\Form\AbstractTypeExtension;
+use Symfony\Component\Form\FormBuilderInterface;
+
+final class ProductTypeExtension extends AbstractTypeExtension
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+    }
+}
+PHP);
+
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
 
-        foreach ($report->getIssues() as $issue) {
-            self::assertSame(Severity::WARNING, $issue->getSeverity());
-        }
+        self::assertSame([], $report->getIssues());
     }
 
     /**
@@ -169,9 +212,9 @@ PHP);
     #[Test]
     public function testGetNameReturnsExpected(): void
     {
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
 
-        self::assertSame('Form Type Extension Priority', $analyzer->getName());
+        self::assertSame('Removed Form Type Extension', $analyzer->getName());
     }
 
     /**
@@ -193,7 +236,7 @@ final class BrandType extends AbstractType
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
 
         self::assertFalse($analyzer->supports($this->createReport()));
     }
@@ -204,7 +247,7 @@ PHP);
     #[Test]
     public function testProducesNoIssueForEmptyProject(): void
     {
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
@@ -219,15 +262,15 @@ PHP);
     #[Test]
     public function testReportsClassIssueWithFileLineAndGlobalEstimate(): void
     {
-        $filePath = $this->writeFile('src/Form/Extension/ProductTypeExtension.php', <<<'PHP'
+        $filePath = $this->writeFile('src/Form/Extension/CountryTypeExtension.php', <<<'PHP'
 <?php
 
 namespace App\Form\Extension;
 
-use Symfony\Component\Form\AbstractTypeExtension;
+use Sylius\Bundle\CoreBundle\Form\Extension\CountryTypeExtension as BaseCountryTypeExtension;
 use Symfony\Component\Form\FormBuilderInterface;
 
-final class ProductTypeExtension extends AbstractTypeExtension
+final class CountryTypeExtension extends BaseCountryTypeExtension
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -235,7 +278,7 @@ final class ProductTypeExtension extends AbstractTypeExtension
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
@@ -244,19 +287,20 @@ PHP);
         self::assertCount(2, $issues);
 
         $classIssue = $issues[0];
-        self::assertSame('Extension de formulaire "ProductTypeExtension" sans priorite explicite', $classIssue->getMessage());
+        self::assertSame(
+            'Extension de formulaire "CountryTypeExtension" heritant de '
+            . 'Sylius\Bundle\CoreBundle\Form\Extension\CountryTypeExtension, supprimee dans Sylius 2.0',
+            $classIssue->getMessage(),
+        );
         self::assertSame(Category::DEPRECATION, $classIssue->getCategory());
         self::assertSame(realpath($filePath), $classIssue->getFile());
         self::assertSame(8, $classIssue->getLine());
-        self::assertStringContainsString('ProductTypeExtension.php', $classIssue->getDetail());
+        self::assertStringContainsString('CountryTypeExtension.php', $classIssue->getDetail());
         self::assertSame(0, $classIssue->getEstimatedMinutes());
         self::assertSame('https://docs.sylius.com/migration-2.0', $classIssue->getDocUrl());
 
         $globalIssue = $issues[1];
-        self::assertSame(
-            '1 extension(s) de type de formulaire detectee(s) sans priorite explicite',
-            $globalIssue->getMessage(),
-        );
+        self::assertSame('1 extension(s) de type de formulaire a revoir', $globalIssue->getMessage());
         self::assertSame(60, $globalIssue->getEstimatedMinutes());
     }
 
@@ -283,37 +327,7 @@ final class CustomerProfileTypeExtension extends AbstractTypeExtension
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        self::assertSame([], $report->getIssues());
-    }
-
-    /**
-     * Verifie qu'une extension declarant getPriority() est consideree comme conforme.
-     */
-    #[Test]
-    public function testIgnoresExtensionDeclaringGetPriority(): void
-    {
-        $this->writeFile('src/Form/Extension/AddressTypeExtension.php', <<<'PHP'
-<?php
-
-namespace App\Form\Extension;
-
-use Symfony\Component\Form\AbstractTypeExtension;
-
-final class AddressTypeExtension extends AbstractTypeExtension
-{
-    public static function getPriority(): int
-    {
-        return 10;
-    }
-}
-PHP);
-
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
@@ -343,7 +357,7 @@ final class BrandChoiceLoader
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
@@ -352,7 +366,7 @@ PHP);
     }
 
     /**
-     * Verifie qu'une classe anonyme heritant d'AbstractTypeExtension est signalee
+     * Verifie qu'une classe anonyme heritant d'une extension Sylius supprimee est signalee
      * avec un libelle generique.
      */
     #[Test]
@@ -369,19 +383,23 @@ final class ExtensionFactory
 {
     public function create(): AbstractTypeExtension
     {
-        return new class () extends AbstractTypeExtension {
+        return new class () extends \Sylius\Bundle\CoreBundle\Form\Extension\LocaleTypeExtension {
         };
     }
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
 
         $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
-        self::assertContains('Extension de formulaire "(anonyme)" sans priorite explicite', $messages);
+        self::assertContains(
+            'Extension de formulaire "(anonyme)" heritant de '
+            . 'Sylius\Bundle\CoreBundle\Form\Extension\LocaleTypeExtension, supprimee dans Sylius 2.0',
+            $messages,
+        );
     }
 
     /**
@@ -397,14 +415,14 @@ PHP);
 
 namespace App\Form\Extension;
 
-use Symfony\Component\Form\AbstractTypeExtension;
+use Sylius\Bundle\CoreBundle\Form\Extension\CountryTypeExtension;
 
-final class ChannelTypeExtension extends AbstractTypeExtension
+final class ChannelTypeExtension extends CountryTypeExtension
 {
 }
 PHP);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
+        $analyzer = new RemovedFormTypeExtensionAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
@@ -418,183 +436,153 @@ PHP);
     }
 
     /**
-     * Verifie la detection d'un tag form.type_extension declare sous forme de chaine.
+     * Verifie que supports retourne true quand seule la configuration reference un service supprime.
      */
     #[Test]
-    public function testDetectsStringFormTypeExtensionTag(): void
+    public function testSupportsProjectReferencingRemovedServiceInConfigOnly(): void
+    {
+        $this->writeFile('config/services.yaml', <<<'YAML'
+services:
+    app.form.extension.type.customer:
+        decorates: sylius.form.extension.type.customer
+YAML);
+
+        self::assertTrue((new RemovedFormTypeExtensionAnalyzer())->supports($this->createReport()));
+    }
+
+    /**
+     * Verifie la detection d'une decoration d'un service d'extension supprime.
+     */
+    #[Test]
+    public function testDetectsDecorationOfRemovedExtensionService(): void
     {
         $filePath = $this->writeFile('config/services.yaml', <<<'YAML'
+services:
+    App\Form\Extension\CustomerTypeExtension:
+        decorates: sylius.form.extension.type.customer
+        arguments: ['@.inner']
+YAML);
+
+        $report = $this->createReport();
+        (new RemovedFormTypeExtensionAnalyzer())->analyze($report);
+
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame(
+            'Reference au service "sylius.form.extension.type.customer", supprime dans Sylius 2.0, dans services.yaml',
+            $issues[0]->getMessage(),
+        );
+        self::assertSame(Severity::BREAKING, $issues[0]->getSeverity());
+        self::assertSame(realpath($filePath), $issues[0]->getFile());
+        self::assertSame(60, $issues[1]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie la detection d'une injection ('@id' ou '@?id') et d'une redefinition
+     * des services supprimes, avec une issue par service et par fichier.
+     */
+    #[Test]
+    public function testDetectsInjectionAndRedefinitionOfRemovedServices(): void
+    {
+        $this->writeFile('config/services/forms.yml', <<<'YAML'
+services:
+    sylius.form.extension.type.country:
+        class: App\Form\Extension\CountryTypeExtension
+    App\Form\LocaleChoiceBuilder:
+        arguments:
+            - '@?sylius.form.extension.type.locale'
+            - '@sylius.form.extension.type.locale'
+YAML);
+
+        $report = $this->createReport();
+        (new RemovedFormTypeExtensionAnalyzer())->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+        $relativePath = 'services' . \DIRECTORY_SEPARATOR . 'forms.yml';
+        self::assertContains('Reference au service "sylius.form.extension.type.country", supprime dans Sylius 2.0, dans ' . $relativePath, $messages);
+        self::assertContains('Reference au service "sylius.form.extension.type.locale", supprime dans Sylius 2.0, dans ' . $relativePath, $messages);
+        self::assertContains('2 extension(s) de type de formulaire a revoir', $messages);
+        self::assertCount(3, $messages);
+    }
+
+    /**
+     * Verifie qu'un tag form.type_extension sans priorite n'est plus signale : Sylius 2.0
+     * n'impose aucune priorite aux extensions de formulaire du projet.
+     */
+    #[Test]
+    public function testIgnoresFormTypeExtensionTagWithoutPriority(): void
+    {
+        $this->writeFile('config/services.yaml', <<<'YAML'
 services:
     app.form.extension.type.product_variant:
         class: App\Form\Extension\ProductVariantTypeExtension
         tags:
             - form.type_extension
+            - { name: form.type_extension, extended_type: Sylius\Bundle\ProductBundle\Form\Type\ProductType }
 YAML);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
         $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        $issues = $report->getIssues();
-        self::assertCount(2, $issues);
-        self::assertSame(
-            'Tag form.type_extension sans priorite pour le service "app.form.extension.type.product_variant"',
-            $issues[0]->getMessage(),
-        );
-        self::assertStringContainsString('services.yaml', $issues[0]->getDetail());
-        self::assertSame(realpath($filePath), $issues[0]->getFile());
-        self::assertSame(Severity::WARNING, $issues[0]->getSeverity());
-    }
-
-    /**
-     * Verifie la detection d'un tag form.type_extension structure sans attribut priority.
-     */
-    #[Test]
-    public function testDetectsArrayFormTypeExtensionTagWithoutPriority(): void
-    {
-        $this->writeFile('config/services/forms.yml', <<<'YAML'
-services:
-    app.form.extension.type.customer_registration:
-        class: App\Form\Extension\CustomerRegistrationTypeExtension
-        tags:
-            - { name: form.type_extension, extended_type: Sylius\Bundle\CoreBundle\Form\Type\Customer\CustomerRegistrationType }
-YAML);
-
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        $issues = $report->getIssues();
-        self::assertCount(2, $issues);
-        self::assertStringContainsString('app.form.extension.type.customer_registration', $issues[0]->getMessage());
-        self::assertStringContainsString('sans attribut priority', $issues[0]->getDetail());
-        self::assertStringContainsString('priority: <valeur>', $issues[0]->getSuggestion());
-    }
-
-    /**
-     * Verifie qu'un tag form.type_extension avec priorite explicite n'est pas signale.
-     */
-    #[Test]
-    public function testIgnoresFormTypeExtensionTagWithPriority(): void
-    {
-        $this->writeFile('config/services.yaml', <<<'YAML'
-services:
-    app.form.extension.type.product:
-        class: App\Form\Extension\ProductTypeExtension
-        tags:
-            - { name: form.type_extension, extended_type: Sylius\Bundle\ProductBundle\Form\Type\ProductType, priority: 100 }
-YAML);
-
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
+        (new RemovedFormTypeExtensionAnalyzer())->analyze($report);
 
         self::assertSame([], $report->getIssues());
     }
 
     /**
-     * Verifie que les autres tags (chaine ou structure) ne sont pas signales.
+     * Verifie que les services Sylius encore presents en 2.0 et les fichiers YAML invalides
+     * ou de structure inattendue sont ignores.
      */
     #[Test]
-    public function testIgnoresUnrelatedServiceTags(): void
-    {
-        $this->writeFile('config/services.yaml', <<<'YAML'
-services:
-    app.form.type.brand:
-        class: App\Form\Type\BrandType
-        tags:
-            - form.type
-            - { name: kernel.event_listener, event: sylius.product.pre_create }
-YAML);
-
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        self::assertSame([], $report->getIssues());
-    }
-
-    /**
-     * Verifie que les fichiers YAML invalides ou de structure inattendue sont ignores.
-     */
-    #[Test]
-    public function testSkipsInvalidOrUnexpectedYamlStructures(): void
+    public function testIgnoresRemainingSyliusServicesAndInvalidYaml(): void
     {
         $this->writeFile('config/broken.yaml', "services:\n  app.foo: [unclosed\n");
         $this->writeFile('config/scalar.yaml', 'just a string');
         $this->writeFile('config/services_as_string.yaml', 'services: none');
-        $this->writeFile('config/routes.yaml', <<<'YAML'
-sylius_shop:
-    resource: "@SyliusShopBundle/Resources/config/routing.yml"
-YAML);
         $this->writeFile('config/services.yaml', <<<'YAML'
 services:
-    _defaults:
-        autowire: true
-    App\Form\Extension\NullService: ~
-    app.form.extension.untagged:
-        class: App\Form\Extension\UntaggedTypeExtension
-    app.form.extension.tags_as_string:
-        class: App\Form\Extension\ScalarTagsTypeExtension
-        tags: form.type_extension
+    App\Form\Extension\CatalogPromotionTypeExtension:
+        decorates: sylius.form.extension.type.catalog_promotion
+    App\Promotion\RuleRegistry:
+        arguments: [!tagged_iterator app.promotion_rule]
+    app.description: 'sylius.form.extension.type.country est mentionne dans un texte'
 YAML);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
         $report = $this->createReport();
-
-        $analyzer->analyze($report);
+        (new RemovedFormTypeExtensionAnalyzer())->analyze($report);
 
         self::assertSame([], $report->getIssues());
     }
 
     /**
-     * Verifie que le resume global cumule les classes et les tags detectes.
-     * Une classe + deux tags = 3 extensions, soit 180 minutes.
+     * Verifie que le resume global cumule classes heritees et references de services.
+     * Une classe + une reference = 2 elements, soit 120 minutes.
      */
     #[Test]
-    public function testGlobalIssueCumulatesClassesAndTags(): void
+    public function testGlobalIssueCumulatesClassesAndServiceReferences(): void
     {
         $this->writeFile('src/Form/Extension/TaxonTypeExtension.php', <<<'PHP'
 <?php
 
 namespace App\Form\Extension;
 
-use Symfony\Component\Form\AbstractTypeExtension;
+use Sylius\Bundle\AdminBundle\Form\Extension\CatalogPromotionScopeTypeExtension;
 
-final class TaxonTypeExtension extends AbstractTypeExtension
+final class TaxonTypeExtension extends CatalogPromotionScopeTypeExtension
 {
 }
 PHP);
         $this->writeFile('config/services.yaml', <<<'YAML'
 services:
-    app.form.extension.type.taxon:
-        class: App\Form\Extension\TaxonTypeExtension
-        tags:
-            - form.type_extension
-    app.form.extension.type.shipping_method:
-        class: App\Form\Extension\ShippingMethodTypeExtension
-        tags:
-            - { name: form.type_extension }
+    app.form.extension.type.locale:
+        decorates: sylius.form.extension.type.locale
 YAML);
 
-        $analyzer = new FormTypeExtensionPriorityAnalyzer();
         $report = $this->createReport();
-
-        $analyzer->analyze($report);
+        (new RemovedFormTypeExtensionAnalyzer())->analyze($report);
 
         $issues = $report->getIssues();
-        self::assertCount(4, $issues);
-
-        $globalIssue = $issues[3];
-        self::assertSame(
-            '3 extension(s) de type de formulaire detectee(s) sans priorite explicite',
-            $globalIssue->getMessage(),
-        );
-        self::assertSame(180, $globalIssue->getEstimatedMinutes());
+        self::assertCount(3, $issues);
+        self::assertSame('2 extension(s) de type de formulaire a revoir', $issues[2]->getMessage());
+        self::assertSame(120, $issues[2]->getEstimatedMinutes());
     }
 
     /**
