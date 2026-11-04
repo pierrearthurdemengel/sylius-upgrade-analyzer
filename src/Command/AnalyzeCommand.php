@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
+use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -71,7 +72,7 @@ final class AnalyzeCommand extends Command
                 'format',
                 'f',
                 InputOption::VALUE_REQUIRED,
-                'Format de sortie du rapport (console, json, sarif, markdown, csv)',
+                'Format de sortie du rapport (console, json, sarif, markdown, csv, pdf)',
                 'console',
             )
             ->addOption(
@@ -147,6 +148,12 @@ final class AnalyzeCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Nom du projet (déduit du composer.json ou du répertoire si non fourni)',
             )
+            ->addOption(
+                'tjm',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Taux journalier moyen en euros : ajoute une estimation budgétaire au rapport PDF',
+            )
         ;
     }
 
@@ -158,6 +165,13 @@ final class AnalyzeCommand extends Command
         $projectPath = $this->resolveProjectPath($input->getArgument('project-path'));
         $targetVersion = $input->getOption('target-version');
         $format = $input->getOption('format');
+
+        $dailyRate = $this->parseDailyRate($input->getOption('tjm'));
+        if ($dailyRate === false) {
+            $io->error('L\'option --tjm attend un nombre entier strictement positif (ex : --tjm=600).');
+
+            return Command::FAILURE;
+        }
 
         /* Détection de la version de Sylius depuis composer.lock */
         $syliusVersion = $this->detectSyliusVersion($projectPath);
@@ -231,9 +245,16 @@ final class AnalyzeCommand extends Command
         /* Préparation du contexte pour le reporter */
         $context = [
             'output_file' => $input->getOption('output'),
+            'tjm' => $dailyRate,
         ];
 
-        $reporter->generate($report, $output, $context);
+        try {
+            $reporter->generate($report, $output, $context);
+        } catch (PdfGenerationException $exception) {
+            $io->error($exception->getMessage());
+
+            return Command::FAILURE;
+        }
 
         /* Application des correctifs automatiques si demandé */
         $wantsFix = $input->getOption('fix') || $input->getOption('dry-run');
@@ -419,5 +440,21 @@ final class AnalyzeCommand extends Command
         }
 
         $io->success(sprintf('%d correctif(s) appliqué(s).', $applied));
+    }
+
+    /**
+     * Valide l'option --tjm : null si absente, false si invalide, sinon le TJM en euros.
+     */
+    private function parseDailyRate(mixed $value): int|false|null
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_string($value) || !ctype_digit($value) || (int) $value <= 0) {
+            return false;
+        }
+
+        return (int) $value;
     }
 }

@@ -92,13 +92,14 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 48 | API Endpoint Restructure | 8+ restructured/removed API endpoint paths |
 | 49 | API Query Extension Signature | `$operationName` to `Operation $operation` parameter change |
 
-### 5 Output Reporters
+### 6 Output Reporters
 
 - **Console** -- Rich terminal output with ASCII gauge, colored severity levels, category breakdown
 - **JSON** -- Machine-readable structured report
 - **CSV** -- Excel-compatible export (UTF-8 BOM, semicolon separator) via `--format=csv`
 - **SARIF** -- Static Analysis Results Interchange Format (GitHub Code Scanning compatible)
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
+- **PDF** -- Stakeholder report generated locally: executive summary, risk factors, roadmap, budget estimate (`--tjm`) and detailed issues (requires `dompdf/dompdf`)
 
 ### 45 Auto-Fixers
 
@@ -158,7 +159,7 @@ Run the analyzer in your CI pipeline, post PR comments, and upload SARIF to GitH
 - **Baseline management** -- save and diff results across runs
 - **Sprint planner** -- generate a migration roadmap with sprint breakdown
 - **Plugin compatibility** -- checks Sylius Addons Marketplace and Packagist
-- **Multi-project analysis** -- consolidated PDF for agencies managing multiple Sylius projects
+- **Multi-project analysis** -- consolidated comparison table and budget for agencies managing several Sylius projects (console, JSON, Markdown or PDF)
 - **Report comparison** -- diff two reports to track migration progress
 - **Plugin compatibility matrix** -- check a list of plugins against the target version
 
@@ -206,7 +207,18 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=markdown --ou
 
 # CSV export (Excel-compatible)
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=csv --output=report.csv
+
+# PDF report, with a budget estimate based on a 600 EUR daily rate
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=pdf --output=report.pdf --tjm=600
 ```
+
+PDF generation is fully local and relies on [dompdf](https://github.com/dompdf/dompdf), an optional dependency kept out of the default install to avoid version conflicts with your project:
+
+```bash
+composer require --dev dompdf/dompdf
+```
+
+The budget estimate converts the estimated hours into days on a 7-hour basis, rounded up to the next half day.
 
 ### Project Naming
 
@@ -266,14 +278,23 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --diff
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --sprint-plan --velocity=40
 ```
 
-### Multi-Project Analysis (Agency)
+### Multi-Project Analysis
+
+Audit a whole portfolio of Sylius shops in one run and get a comparison table (complexity, risk, blocking issues, hours, budget) with totals:
 
 ```bash
-# Analyze multiple projects and generate a consolidated PDF
+# Comparison table in the terminal
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:multi-analyze \
-  /path/to/project1 /path/to/project2 /path/to/project3 \
-  --api-key=sua_agy_xxx --output=consolidated-report.pdf --tjm=600
+  /path/to/project1 /path/to/project2 /path/to/project3 --tjm=600
+
+# Consolidated PDF (one overview page, then one summary page per project)
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:multi-analyze \
+  /path/to/project1 /path/to/project2 --format=pdf --output=portfolio.pdf --tjm=600
+
+# Also available: --format=json and --format=markdown
 ```
+
+Projects sharing the same Composer name (forks, per-country variants) are told apart by their directory name.
 
 ### Compare Reports
 
