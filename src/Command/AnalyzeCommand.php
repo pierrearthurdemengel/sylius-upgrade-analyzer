@@ -71,7 +71,7 @@ final class AnalyzeCommand extends Command
                 'format',
                 'f',
                 InputOption::VALUE_REQUIRED,
-                'Format de sortie du rapport (console, json)',
+                'Format de sortie du rapport (console, json, sarif, markdown, csv)',
                 'console',
             )
             ->addOption(
@@ -98,18 +98,6 @@ final class AnalyzeCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'Désactiver la vérification de compatibilité via le marketplace',
-            )
-            ->addOption(
-                'pdf',
-                null,
-                InputOption::VALUE_NONE,
-                'Générer un rapport au format PDF',
-            )
-            ->addOption(
-                'api-key',
-                null,
-                InputOption::VALUE_REQUIRED,
-                'Clé API pour les services externes',
             )
             ->addOption(
                 'fix',
@@ -243,7 +231,6 @@ final class AnalyzeCommand extends Command
         /* Préparation du contexte pour le reporter */
         $context = [
             'output_file' => $input->getOption('output'),
-            'pdf' => $input->getOption('pdf'),
         ];
 
         $reporter->generate($report, $output, $context);

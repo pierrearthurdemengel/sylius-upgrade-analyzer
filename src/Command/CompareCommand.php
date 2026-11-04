@@ -4,23 +4,19 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\LicenseExpiredException;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\ServiceUnavailableException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportLoader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * Commande de comparaison de deux rapports de migration.
- * Accepte deux fichiers JSON locaux ou deux IDs de rapport (via l'API).
+ * Accepte deux fichiers JSON produits par sylius-upgrade:analyze --format=json.
  * Affiche les issues résolues, nouvelles et la progression.
  */
 #[AsCommand(
@@ -29,11 +25,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 final class CompareCommand extends Command
 {
-    use ApiKeyResolverTrait;
-
     public function __construct(
         private readonly ReportLoader $reportLoader,
-        private readonly ApiClient $apiClient,
     ) {
         parent::__construct();
     }
@@ -51,24 +44,6 @@ final class CompareCommand extends Command
                 InputArgument::OPTIONAL,
                 'Fichier JSON du rapport actuel (après)',
             )
-            ->addOption(
-                'before-id',
-                null,
-                InputOption::VALUE_REQUIRED,
-                'ID du rapport de référence (API, nécessite --api-key)',
-            )
-            ->addOption(
-                'after-id',
-                null,
-                InputOption::VALUE_REQUIRED,
-                'ID du rapport actuel (API, nécessite --api-key)',
-            )
-            ->addOption(
-                'api-key',
-                null,
-                InputOption::VALUE_REQUIRED,
-                'Clé API Agency (nécessaire pour la comparaison par ID)',
-            )
         ;
     }
 
@@ -76,20 +51,11 @@ final class CompareCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $beforeId = $input->getOption('before-id');
-        $afterId = $input->getOption('after-id');
-
-        /* Mode API : comparaison par IDs via le service */
-        if (is_string($beforeId) && $beforeId !== '' && is_string($afterId) && $afterId !== '') {
-            return $this->compareViaApi($beforeId, $afterId, $input, $io);
-        }
-
-        /* Mode local : comparaison de fichiers JSON */
         $beforePath = $input->getArgument('before');
         $afterPath = $input->getArgument('after');
 
         if (!is_string($beforePath) || $beforePath === '' || !is_string($afterPath) || $afterPath === '') {
-            $io->error('Fournissez deux fichiers JSON ou utilisez --before-id et --after-id.');
+            $io->error('Fournissez deux fichiers JSON de rapport à comparer.');
 
             return Command::FAILURE;
         }
@@ -112,66 +78,6 @@ final class CompareCommand extends Command
         }
 
         $this->displayDiff($before, $after, $io);
-
-        return Command::SUCCESS;
-    }
-
-    /**
-     * Compare deux rapports via l'API (Agency).
-     */
-    private function compareViaApi(string $beforeId, string $afterId, InputInterface $input, SymfonyStyle $io): int
-    {
-        $apiKey = $this->resolveApiKey($input);
-        if ($apiKey === '') {
-            $io->error('Clé API requise pour la comparaison par ID.');
-
-            return Command::FAILURE;
-        }
-
-        try {
-            $result = $this->apiClient->compareReports($beforeId, $afterId, $apiKey);
-        } catch (LicenseExpiredException $exception) {
-            $io->error(sprintf('Erreur d\'authentification : %s', $exception->getMessage()));
-
-            return Command::FAILURE;
-        } catch (ServiceUnavailableException $exception) {
-            $io->error(sprintf('Service indisponible : %s', $exception->getMessage()));
-
-            return Command::FAILURE;
-        }
-
-        $io->title('Comparaison de rapports (via API)');
-
-        /* Affichage des résultats du service */
-        $resolved = $result['resolved'] ?? [];
-        $new = $result['new'] ?? [];
-        $progress = $result['progress_percent'] ?? 0;
-
-        $io->text(sprintf(
-            'Progression : <info>%.1f%%</info> des issues résolues',
-            $progress,
-        ));
-        $io->newLine();
-
-        if (is_array($resolved) && $resolved !== []) {
-            $io->text(sprintf('<fg=green>✓ %d issue(s) résolue(s) :</>', count($resolved)));
-            foreach ($resolved as $issue) {
-                if (is_array($issue)) {
-                    $io->text(sprintf('  <fg=green>  - [%s] %s</>', $issue['category'] ?? '?', $issue['message'] ?? '?'));
-                }
-            }
-            $io->newLine();
-        }
-
-        if (is_array($new) && $new !== []) {
-            $io->text(sprintf('<fg=red>✗ %d nouvelle(s) issue(s) :</>', count($new)));
-            foreach ($new as $issue) {
-                if (is_array($issue)) {
-                    $io->text(sprintf('  <fg=red>  + [%s] %s</>', $issue['category'] ?? '?', $issue['message'] ?? '?'));
-                }
-            }
-            $io->newLine();
-        }
 
         return Command::SUCCESS;
     }
