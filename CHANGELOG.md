@@ -7,7 +7,18 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- Format `pdf` généré entièrement en local (`--format=pdf`) : synthèse, facteurs de risque, feuille de route, problèmes bloquants détaillés, avertissements et suggestions. Repose sur `dompdf/dompdf`, proposé en dépendance optionnelle (`suggest`)
+- Option `--tjm` sur `sylius-upgrade:analyze` et `sylius-upgrade:multi-analyze` : estimation budgétaire sur une base de 7 h par jour, arrondie à la demi-journée supérieure
+- `CostEstimator` et `CostEstimate` pour le calcul budgétaire
+- `MultiProjectReporter` : rapport consolidé multi-projets en console, JSON, Markdown ou PDF
+
+### Changed
+- `sylius-upgrade:multi-analyze` fonctionne désormais en local, sans clé API : tableau comparatif des projets (complexité, risque, bloquants, charge, budget) avec totaux, options `--format`, `--output`, `--tjm` et `--no-marketplace`
+- Les projets partageant le même nom Composer sont distingués par le nom de leur répertoire dans le rapport consolidé
+
 ### Removed
+- Option `--api-key` de `sylius-upgrade:multi-analyze`, `ApiClient`, `ApiKeyResolverTrait`, `LicenseExpiredException` et `ServiceUnavailableException`
 - Commandes `sylius-upgrade:upload`, `sylius-upgrade:history` et `sylius-upgrade:webhook` : elles dépendaient du service hébergé, qui n'existe plus
 - Mode `--before-id` / `--after-id` / `--api-key` de `sylius-upgrade:compare` (la comparaison de fichiers JSON locaux reste disponible)
 - Options `--pdf` et `--api-key` de `sylius-upgrade:analyze`, qui n'avaient aucun effet
