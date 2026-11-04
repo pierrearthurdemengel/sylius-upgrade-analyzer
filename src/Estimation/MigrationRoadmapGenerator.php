@@ -138,7 +138,6 @@ final class MigrationRoadmapGenerator
 
         /* Regroupement des problèmes BREAKING par catégorie (hors frontend et plugins) */
         $breakingByCategory = [];
-        $minutesByCategory = [];
 
         foreach ($report->getIssuesBySeverity(Severity::BREAKING) as $issue) {
             $category = $issue->getCategory();
@@ -149,17 +148,16 @@ final class MigrationRoadmapGenerator
             }
 
             $categoryValue = $category->value;
-            if (!isset($breakingByCategory[$categoryValue])) {
-                $breakingByCategory[$categoryValue] = 0;
-                $minutesByCategory[$categoryValue] = 0;
-            }
-            $breakingByCategory[$categoryValue]++;
-            $minutesByCategory[$categoryValue] += $issue->getEstimatedMinutes();
+            $totals = $breakingByCategory[$categoryValue] ?? ['count' => 0, 'minutes' => 0];
+            $breakingByCategory[$categoryValue] = [
+                'count' => $totals['count'] + 1,
+                'minutes' => $totals['minutes'] + $issue->getEstimatedMinutes(),
+            ];
         }
 
         /* Création d'une étape par catégorie ayant des problèmes bloquants */
-        foreach ($breakingByCategory as $category => $count) {
-            $hours = ceil($minutesByCategory[$category] / 30.0) * 0.5;
+        foreach ($breakingByCategory as $category => ['count' => $count, 'minutes' => $minutes]) {
+            $hours = ceil($minutes / 30.0) * 0.5;
 
             /* Les catégories API et resource ne peuvent pas être parallélisées car elles impactent le cœur */
             $canParallelize = !in_array($category, [Category::API->value, Category::RESOURCE->value], true);
