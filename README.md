@@ -172,6 +172,20 @@ Requirements: PHP 8.2+, Symfony 6.4 or 7.2.
 
 ---
 
+## Professional Migration Services
+
+Sylius Upgrade Analyzer is developed by **Pierre-Arthur Demengel**, freelance developer specialised in Sylius 1.x to 2.x migrations.
+
+The report tells you *what* has to change and *how long* it should take. If you would rather not carry the migration alone:
+
+- **Audit** -- review of your report with your team, risks and priorities
+- **Fixed-price migration** -- the upgrade carried out end to end, from dependencies to production
+- **Team support** -- guidance on Twig Hooks, Symfony Workflow, Payment Requests and plugin replacements
+
+**[Get a free migration diagnosis](https://creation-site-pro.fr/en/sylius-2-upgrade?utm_source=analyzer-readme)**
+
+---
+
 ## Usage
 
 ### Basic Analysis
@@ -249,6 +263,14 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze -vv
 ```bash
 # Skip marketplace compatibility checks
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --no-marketplace
+```
+
+### Hiding the Migration Services Mention
+
+Console, Markdown and PDF reports end with a one-line mention of the migration services above. JSON, SARIF and CSV outputs never contain it. To remove it:
+
+```bash
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --no-promo
 ```
 
 ### Custom Rules
@@ -519,6 +541,8 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Author
 
-**Pierre-Arthur Demengel** -- [pierrearthur.demengel@gmail.com](mailto:pierrearthur.demengel@gmail.com)
+**Pierre-Arthur Demengel** -- freelance developer specialised in Sylius 1.x to 2.x migrations -- [pierrearthur.demengel@gmail.com](mailto:pierrearthur.demengel@gmail.com)
+
+- Website: [creation-site-pro.fr](https://creation-site-pro.fr/en/sylius-2-upgrade?utm_source=analyzer-readme-author)
 
 - GitHub: [github.com/pierrearthurdemengel/sylius-upgrade-analyzer](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer)
