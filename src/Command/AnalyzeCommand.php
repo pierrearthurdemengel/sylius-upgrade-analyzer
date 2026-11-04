@@ -394,8 +394,17 @@ final class AnalyzeCommand extends Command
             return;
         }
 
-        /* Mode fix : applique les correctifs */
+        /* Mode fix : en terminal interactif, rien n'est écrit sans accord explicite. En CI
+           (sans terminal ou avec --no-interaction), le comportement reste celui attendu par les scripts. */
         $io->newLine();
+        if ($input->isInteractive()
+            && !$io->confirm(sprintf('Appliquer ces %d correctif(s) aux fichiers du projet ?', count($fixes)), false)
+        ) {
+            $io->text('<comment>Aucune modification appliquée. Utilisez --dry-run pour voir le patch.</comment>');
+
+            return;
+        }
+
         $applied = 0;
 
         foreach ($fixes as $fix) {
