@@ -90,14 +90,14 @@ final class CustomFixtureAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie la detection des classes de fixtures dans src/DataFixtures/.
+     * Verifie la detection des fixtures Sylius placees dans src/DataFixtures/.
      */
     #[Test]
     public function testDetectsDataFixtureClasses(): void
     {
         $fixturesDir = $this->tempDir . '/src/DataFixtures';
         mkdir($fixturesDir, 0755, true);
-        file_put_contents($fixturesDir . '/ProductFixture.php', "<?php\nnamespace App\\DataFixtures;\nclass ProductFixture {}\n");
+        file_put_contents($fixturesDir . '/ProductFixture.php', "<?php\nnamespace App\\DataFixtures;\nuse Sylius\\Bundle\\FixturesBundle\\Fixture\\AbstractFixture;\nclass ProductFixture extends AbstractFixture {}\n");
 
         $analyzer = new CustomFixtureAnalyzer();
         $report = $this->createReport();
@@ -119,13 +119,14 @@ final class CustomFixtureAnalyzerTest extends TestCase
     {
         $fixturesDir = $this->tempDir . '/src/DataFixtures';
         mkdir($fixturesDir, 0755, true);
-        file_put_contents($fixturesDir . '/ProductFixture.php', "<?php\nclass ProductFixture {}\n");
+        file_put_contents($fixturesDir . '/ProductFixture.php', "<?php\nclass ProductFixture extends \\Sylius\\Bundle\\FixturesBundle\\Fixture\\AbstractFixture {}\n");
 
         $analyzer = new CustomFixtureAnalyzer();
         $report = $this->createReport();
 
         $analyzer->analyze($report);
 
+        self::assertNotEmpty($report->getIssues());
         foreach ($report->getIssues() as $issue) {
             self::assertSame(Severity::WARNING, $issue->getSeverity());
         }
@@ -296,7 +297,7 @@ YAML);
     }
 
     /**
-     * Verifie que l'issue d'une classe de src/DataFixtures/ pointe vers le fichier concerne.
+     * Verifie que l'issue d'une fixture Sylius de src/DataFixtures/ pointe vers le fichier et la ligne concernes.
      */
     #[Test]
     public function testDataFixtureClassIssueReferencesFile(): void
@@ -306,9 +307,9 @@ YAML);
 
 namespace App\DataFixtures;
 
-use Doctrine\Bundle\FixturesBundle\Fixture;
+use Sylius\Bundle\CoreBundle\Fixture\AbstractResourceFixture;
 
-final class CustomerGroupFixture extends Fixture
+final class CustomerGroupFixture extends AbstractResourceFixture
 {
 }
 PHP);
@@ -316,11 +317,12 @@ PHP);
         $report = $this->createReport();
         (new CustomFixtureAnalyzer())->analyze($report);
 
-        $issues = $this->issuesWithMessage($report, 'Classe de fixture detectee : CustomerGroupFixture.php');
+        $issues = $this->issuesWithMessage($report, 'Classe de fixture Sylius "CustomerGroupFixture" detectee');
 
         self::assertCount(1, $issues);
+        self::assertSame(7, $issues[0]->getLine());
         self::assertSame(realpath($fixtureFile), realpath((string) $issues[0]->getFile()));
-        self::assertStringContainsString('src/DataFixtures/', $issues[0]->getDetail());
+        self::assertStringContainsString('CustomerGroupFixture.php', $issues[0]->getDetail());
     }
 
     /**
@@ -475,9 +477,9 @@ PHP);
         $report = $this->createReport();
         (new CustomFixtureAnalyzer())->analyze($report);
 
-        self::assertCount(1, $this->issuesWithMessage($report, 'Classe de fixture detectee'));
-        self::assertSame([], $this->issuesWithMessage($report, 'Classe de fixture Sylius'));
+        self::assertCount(1, $this->issuesWithMessage($report, 'Classe de fixture Sylius "ShippingZoneFixture"'));
         self::assertCount(1, $this->issuesWithMessage($report, '1 fixture(s) personnalisee(s) detectee(s)'));
+        self::assertCount(2, $report->getIssues());
     }
 
     /**
@@ -486,7 +488,7 @@ PHP);
     #[Test]
     public function testSummaryAggregatesClassesSuitesAndInterfaces(): void
     {
-        $this->writeFile('src/DataFixtures/AppFixtures.php', "<?php\nnamespace App\\DataFixtures;\nclass AppFixtures {}\n");
+        $this->writeFile('src/DataFixtures/AppFixtures.php', "<?php\nnamespace App\\DataFixtures;\nclass AppFixtures extends \\Sylius\\Bundle\\FixturesBundle\\Fixture\\AbstractFixture {}\n");
         $this->writeFile('config/packages/sylius_fixtures.yaml', "sylius_fixtures:\n    suites:\n        default: ~\n");
         $this->writeFile('src/Fixture/VendorFixture.php', <<<'PHP'
 <?php
@@ -508,6 +510,104 @@ PHP);
         self::assertCount(1, $summary);
         self::assertSame(360, $summary[0]->getEstimatedMinutes());
         self::assertCount(4, $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'une fixture Doctrine pure placee dans src/DataFixtures/ n'est pas signalee :
+     * DoctrineFixturesBundle n'est pas concerne par la migration Sylius.
+     */
+    #[Test]
+    public function testIgnoresDoctrineFixtureInDataFixturesDirectory(): void
+    {
+        $this->writeFile('src/DataFixtures/AppFixtures.php', <<<'PHP'
+<?php
+
+namespace App\DataFixtures;
+
+use Doctrine\Bundle\FixturesBundle\Fixture;
+use Doctrine\Persistence\ObjectManager;
+
+final class AppFixtures extends Fixture
+{
+    public function load(ObjectManager $manager): void
+    {
+    }
+}
+PHP);
+
+        $report = $this->createReport();
+        (new CustomFixtureAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'une suite declaree a la fois dans sylius_fixtures.yaml et sylius_fixtures.yml
+     * n'est comptee qu'une fois.
+     */
+    #[Test]
+    public function testCountsSuiteDeclaredInYamlAndYmlOnce(): void
+    {
+        $this->writeFile('config/packages/sylius_fixtures.yaml', "sylius_fixtures:\n    suites:\n        default: ~\n");
+        $this->writeFile('config/packages/sylius_fixtures.yml', "sylius_fixtures:\n    suites:\n        default: ~\n        demo: ~\n");
+
+        $report = $this->createReport();
+        (new CustomFixtureAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Suite de fixtures "default"'));
+        self::assertCount(1, $this->issuesWithMessage($report, 'Suite de fixtures "demo"'));
+        self::assertCount(1, $this->issuesWithMessage($report, '2 fixture(s) personnalisee(s) detectee(s)'));
+    }
+
+    /**
+     * Verifie la detection d'une classe implementant FixtureInterface de Sylius par son nom pleinement qualifie.
+     */
+    #[Test]
+    public function testDetectsFullyQualifiedSyliusFixtureInterfaceWithoutImport(): void
+    {
+        $this->writeFile('src/Fixture/LoyaltyTierFixture.php', <<<'PHP'
+<?php
+
+namespace App\Fixture;
+
+final class LoyaltyTierFixture implements \Sylius\Bundle\FixturesBundle\Fixture\FixtureInterface
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new CustomFixtureAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Classe de fixture Sylius "LoyaltyTierFixture" detectee');
+
+        self::assertCount(1, $issues);
+        self::assertSame(5, $issues[0]->getLine());
+    }
+
+    /**
+     * Verifie qu'une interface FixtureInterface d'un autre espace de noms n'est pas confondue
+     * avec celle de Sylius, meme si le fichier importe aussi une classe Sylius.
+     */
+    #[Test]
+    public function testIgnoresNonSyliusFixtureInterfaceInFileImportingSylius(): void
+    {
+        $this->writeFile('src/Fixture/ImportFixture.php', <<<'PHP'
+<?php
+
+namespace App\Fixture;
+
+use App\Import\FixtureInterface;
+use Sylius\Bundle\FixturesBundle\Fixture\AbstractFixture;
+
+final class ImportFixture implements FixtureInterface
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new CustomFixtureAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
     }
 
     /**

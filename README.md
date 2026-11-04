@@ -8,7 +8,7 @@
 
 **Automated migration audit & auto-fix CLI for Sylius 1.x to 2.x projects.**
 
-Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every** breaking change, deprecated API, and incompatible pattern, then produces a detailed migration report with time estimates, fix suggestions, and **45 automatic corrections** covering the most common migration tasks.
+Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every** breaking change, deprecated API, and incompatible pattern, then produces a detailed migration report with time estimates, fix suggestions, and **41 automatic corrections** covering the most common migration tasks.
 
 Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md), [UPGRADE-API-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/UPGRADE-API-2.0.md), and [CHANGELOG-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/CHANGELOG-2.0.md). Nothing is left unchecked.
 
@@ -16,7 +16,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 
 ## Features
 
-### 49 Built-in Analyzers
+### 48 Built-in Analyzers
 
 #### Templates & Frontend (6)
 
@@ -29,7 +29,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 5 | Webpack Encore | `webpack.config.js` + `@symfony/webpack-encore` detection |
 | 6 | Use Webpack Config | Removed `use_webpack` from `sylius_ui` config |
 
-#### Deprecations & Breaking Changes (35)
+#### Deprecations & Breaking Changes (34)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
@@ -43,54 +43,53 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 14 | Removed Payment Gateway | Stripe / PayPal Express removed from core |
 | 15 | Service Decorator | Decorators targeting renamed Sylius services |
 | 16 | Order Processor Priority | Priority conflicts (40-60 range) |
-| 17 | Form Type Extension Priority | Missing explicit priorities |
+| 17 | Removed Form Type Extension | Classes and services built on form extensions removed from Sylius core |
 | 18 | Behat Context Deprecation | 10+ deprecated Behat contexts |
 | 19 | Admin Menu Event | Event-based admin menu system changes |
-| 20 | Translation Key | Renamed `sylius.ui.*` / `sylius.form.*` / `sylius.email.*` keys |
-| 21 | Promotion Rule Checker | PromotionRuleCheckerInterface changes |
-| 22 | Shipping Calculator | CalculatorInterface changes |
-| 23 | Doctrine XML Mapping | `*.orm.xml` to PHP attribute migration |
-| 24 | Custom Fixture | Fixture system changes |
-| 25 | Multi-Store Channel | `findOneByHostname` deprecation, locale contexts |
-| 26 | Bundle Configuration | 7 removed bundles + 6 required new bundles in `bundles.php` |
-| 27 | Calendar to Clock | `sylius/calendar` to `symfony/clock` (`ClockInterface`) |
-| 28 | Security Firewall | `new_api_admin_user` / `new_api_shop_user` firewall renames |
-| 29 | User Model Field | Removed `locked`, `expiresAt`, `credentialsExpireAt`, `\Serializable` |
-| 30 | Removed Class | 150+ removed classes (Templating Helpers, UiBundle, DataCollectors, etc.) |
-| 31 | Renamed Service ID | 21 renamed/removed Sylius service IDs |
-| 32 | Removed Route | 43 removed admin/shop routes (partials, AJAX, etc.) |
-| 33 | LiipImagine Config | Resolver/loader `"default"` to `"sylius_image"` |
-| 34 | Constructor Signature | 24 classes with changed constructor signatures |
-| 35 | PHP Node Version | PHP 8.2+, Node.js 20+, Symfony 5.4 detection |
-| 36 | Class Move | 14 classes moved between bundles |
-| 37 | Service Visibility | Direct `$container->get('sylius.*')` calls (now private) |
-| 38 | Payment Request Env | Missing Messenger transport env vars for payments |
-| 39 | Deprecated Bundle Package | 7 removed packages (FOSRest, JMSSerializer, BazingaHateoas, etc.) |
-| 40 | Removed Config Key | Removed YAML config keys (`sylius_core.*`, `sylius_api.*`, MongoDB/PHPCR ODM) |
-| 41 | Routing Import | Legacy routing imports (Payum shop routes, API route parameter renames) |
+| 20 | Promotion Rule Checker | PromotionRuleCheckerInterface changes |
+| 21 | Shipping Calculator | CalculatorInterface changes |
+| 22 | Doctrine XML Mapping | `*.orm.xml` to PHP attribute migration |
+| 23 | Custom Fixture | Fixture system changes |
+| 24 | Multi-Store Channel | Removed `findOneByHostname()`, custom channel and locale contexts |
+| 25 | Bundle Configuration | 7 removed bundles + 6 required new bundles in `bundles.php` |
+| 26 | Calendar to Clock | `sylius/calendar` to `symfony/clock` (`ClockInterface`) |
+| 27 | Security Firewall | `new_api_admin_user` / `new_api_shop_user` firewall renames |
+| 28 | User Model Field | Removed `locked`, `expiresAt`, `credentialsExpireAt`, `\Serializable` |
+| 29 | Removed Class | 150+ removed classes (Templating Helpers, UiBundle, DataCollectors, etc.) |
+| 30 | Renamed Service ID | 21 renamed/removed Sylius service IDs |
+| 31 | Removed Route | 43 removed admin/shop routes (partials, AJAX, etc.) |
+| 32 | LiipImagine Config | Resolver/loader `"default"` to `"sylius_image"` |
+| 33 | Constructor Signature | 24 classes with changed constructor signatures |
+| 34 | PHP Node Version | PHP 8.2+, Node.js 20+, Symfony 5.4 detection |
+| 35 | Class Move | 14 classes moved between bundles |
+| 36 | Service Visibility | Direct `$container->get('sylius.*')` calls (now private) |
+| 37 | Payment Request Env | Missing Messenger transport env vars for payments |
+| 38 | Deprecated Bundle Package | 7 removed packages (FOSRest, JMSSerializer, BazingaHateoas, etc.) |
+| 39 | Removed Config Key | Removed YAML config keys (`sylius_core.*`, `sylius_api.*`, MongoDB/PHPCR ODM) |
+| 40 | Routing Import | Legacy routing imports (Payum shop routes, API route parameter renames) |
 
 #### Plugins (1)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
-| 42 | Plugin Compatibility | Sylius plugins cross-referenced with Addons Marketplace + Packagist |
+| 41 | Plugin Compatibility | Sylius plugins cross-referenced with Addons Marketplace + Packagist |
 
 #### Grid & Resource (3)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
-| 43 | Grid Customization | Custom grid YAML + PHP grid classes + custom columns/filters |
-| 44 | Resource Bundle | SyliusResourceBundle config, custom factories/repositories |
-| 45 | Grid Filter Entity | `type: entities` to `type: entity`, `field:` to `fields:` syntax |
+| 42 | Grid Customization | Custom grid YAML + PHP grid classes + custom columns/filters |
+| 43 | Resource Bundle | SyliusResourceBundle config, custom factories/repositories |
+| 44 | Grid Filter Entity | `type: entities` to `type: entity`, `field:` to `fields:` syntax |
 
 #### API Platform (4)
 
 | # | Analyzer | What it detects |
 |---|----------|-----------------|
-| 46 | API Platform Migration | @ApiResource, DataProvider/DataPersister, ApiPlatform\Core namespace |
-| 47 | API Serialization Group | Missing `sylius:` prefix on serialization groups |
-| 48 | API Endpoint Restructure | 8+ restructured/removed API endpoint paths |
-| 49 | API Query Extension Signature | `$operationName` to `Operation $operation` parameter change |
+| 45 | API Platform Migration | @ApiResource, DataProvider/DataPersister, ApiPlatform\Core namespace |
+| 46 | API Serialization Group | Missing `sylius:` prefix on serialization groups |
+| 47 | API Endpoint Restructure | 8+ restructured/removed API endpoint paths |
+| 48 | API Query Extension Signature | `$operationName` to `Operation $operation` parameter change |
 
 ### 6 Output Reporters
 
@@ -101,7 +100,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
 - **PDF** -- Stakeholder report generated locally: executive summary, risk factors, roadmap, budget estimate (`--tjm`) and detailed issues (requires `dompdf/dompdf`)
 
-### 45 Auto-Fixers
+### 41 Auto-Fixers
 
 | Fixer | Confidence | What it fixes |
 |-------|:----------:|---------------|
@@ -128,11 +127,9 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | Payment Request Env Fixer | HIGH | Adds 2 required Messenger transport env vars to `.env` |
 | Routing Import Fixer | HIGH | Replaces 7 old routing imports and parameter names |
 | Removed Config Key Fixer | HIGH | Comments 7 removed YAML config keys with TODO markers |
-| Translation Key Fixer | MEDIUM | Replaces 5 renamed translation key prefixes (`sylius.ui.admin` → `sylius.admin`, etc.) |
 | Behat Context Fixer | MEDIUM | Renames deprecated Behat context classes |
 | API Serialization Group Fixer | MEDIUM | Adds `sylius:` prefix to 4 serialization group pairs |
 | API Query Extension Signature Fixer | MEDIUM | Updates `$operationName` → `Operation $operation` parameter + use statement |
-| Form Type Extension Priority Fixer | MEDIUM | Adds `getPriority()` method when `getExtendedTypes()` exists |
 | Order Processor Priority Fixer | MEDIUM | Adds `priority` in YAML tags + `getPriority()` in PHP |
 | Deprecated Email Manager Fixer | MEDIUM | Replaces 4 deprecated email manager interface FQCNs |
 | Admin Menu Event Fixer | MEDIUM | Replaces 3 old admin menu event names |

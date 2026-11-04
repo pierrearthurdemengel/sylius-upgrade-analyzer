@@ -309,7 +309,7 @@ YAML);
         self::assertStringContainsString('payum.yml', $issues[0]->getDetail());
         self::assertSame(realpath($filePath), $issues[0]->getFile());
         self::assertSame(
-            'Migration Payum requise : 1 gateway(s) standard et 0 gateway(s) personnalisee(s)',
+            'Migration Payum requise : 1 gateway(s) standard, 0 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $issues[1]->getMessage(),
         );
         self::assertSame(120, $issues[1]->getEstimatedMinutes());
@@ -407,14 +407,15 @@ PHP);
         ));
         self::assertCount(1, $globalIssues);
         self::assertSame(
-            'Migration Payum requise : 0 gateway(s) standard et 1 gateway(s) personnalisee(s)',
+            'Migration Payum requise : 0 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $globalIssues[0]->getMessage(),
         );
         self::assertSame(480, $globalIssues[0]->getEstimatedMinutes());
     }
 
     /**
-     * Vérifie que chaque import d'une classe Payum produit un problème avec sa ligne.
+     * Vérifie que chaque import d'une classe Payum produit un problème avec sa ligne,
+     * suivi d'un résumé estimant le fichier comme dépendant de Payum.
      */
     #[Test]
     public function testDetectsPayumImports(): void
@@ -439,12 +440,13 @@ PHP);
         $analyzer->analyze($report);
 
         $issues = $report->getIssues();
-        self::assertCount(2, $issues);
+        self::assertCount(3, $issues);
         self::assertSame('Utilisation de la classe Payum Payum\Core\Action\ActionInterface detectee', $issues[0]->getMessage());
         self::assertSame(5, $issues[0]->getLine());
         self::assertSame('Utilisation de la classe Payum Payum\Core\Request\Capture detectee', $issues[1]->getMessage());
         self::assertSame(6, $issues[1]->getLine());
         self::assertStringContainsString('CaptureAction.php', $issues[1]->getDetail());
+        self::assertSame(120, $issues[2]->getEstimatedMinutes());
     }
 
     /**
@@ -545,11 +547,92 @@ PHP);
         ));
         self::assertCount(1, $globalIssues);
         self::assertSame(
-            'Migration Payum requise : 1 gateway(s) standard et 1 gateway(s) personnalisee(s)',
+            'Migration Payum requise : 1 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $globalIssues[0]->getMessage(),
         );
         self::assertSame(600, $globalIssues[0]->getEstimatedMinutes());
         self::assertSame(Severity::BREAKING, $globalIssues[0]->getSeverity());
+    }
+
+    /**
+     * Vérifie qu'un projet n'ayant que des actions Payum (sans gateway factory ni configuration)
+     * reçoit un résumé global estimé : 2 fichiers × 120 = 240 minutes.
+     */
+    #[Test]
+    public function testEstimatesProjectWithOnlyPayumActions(): void
+    {
+        $this->writeFile('src/Payum/Action/CaptureAction.php', <<<'PHP'
+<?php
+
+namespace App\Payum\Action;
+
+use Payum\Core\Action\ActionInterface;
+use Payum\Core\Request\Capture;
+
+final class CaptureAction implements ActionInterface
+{
+}
+PHP);
+        $this->writeFile('src/Payum/Action/StatusAction.php', <<<'PHP'
+<?php
+
+namespace App\Payum\Action;
+
+use Payum\Core\Action\ActionInterface;
+use Payum\Core\Request\GetStatusInterface;
+
+final class StatusAction implements ActionInterface
+{
+}
+PHP);
+
+        $analyzer = new PayumAnalyzer();
+        $report = $this->createTempReport();
+
+        $analyzer->analyze($report);
+
+        $globalIssues = array_values(array_filter(
+            $report->getIssues(),
+            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration Payum requise'),
+        ));
+        self::assertCount(1, $globalIssues);
+        self::assertSame(
+            'Migration Payum requise : 0 gateway(s) standard, 0 gateway(s) personnalisee(s) '
+            . 'et 2 autre(s) fichier(s) PHP dependant de Payum',
+            $globalIssues[0]->getMessage(),
+        );
+        self::assertSame(240, $globalIssues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Vérifie que les imports groupés (use Payum\Core\{...}) sont détectés avec leur nom complet.
+     */
+    #[Test]
+    public function testDetectsGroupedPayumImports(): void
+    {
+        $this->writeFile('src/Payum/Action/NotifyAction.php', <<<'PHP'
+<?php
+
+namespace App\Payum\Action;
+
+use Payum\Core\{
+    Action\ActionInterface,
+    Request\Notify
+};
+
+final class NotifyAction implements ActionInterface
+{
+}
+PHP);
+
+        $analyzer = new PayumAnalyzer();
+        $report = $this->createTempReport();
+
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+        self::assertContains('Utilisation de la classe Payum Payum\Core\Action\ActionInterface detectee', $messages);
+        self::assertContains('Utilisation de la classe Payum Payum\Core\Request\Notify detectee', $messages);
     }
 
     /**

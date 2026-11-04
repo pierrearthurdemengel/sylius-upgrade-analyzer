@@ -38,7 +38,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CustomFixtureAnalyze
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DeprecatedBundlePackageAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DeprecatedEmailManagerAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\DoctrineXmlMappingAnalyzer;
-use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\FormTypeExtensionPriorityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\GridFilterEntityAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\LiipImagineConfigAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\MessageBusRenameAnalyzer;
@@ -49,6 +48,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PayumAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PromotionRuleCheckerAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedClassAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedConfigKeyAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedFormTypeExtensionAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedPaymentGatewayAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RemovedRouteAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\RenamedServiceIdAnalyzer;
@@ -59,7 +59,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ServiceVisibilityAna
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ShippingCalculatorAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SonataBlockEventAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer;
-use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\TranslationKeyAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend\UseWebpackConfigAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserEncoderAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\UserModelFieldAnalyzer;
@@ -86,7 +85,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\CommandHandlerFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\DeprecatedBundlePackageFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\DeprecatedEmailManagerFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
-use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FormTypeExtensionPriorityFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\GridCustomizationFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\GridFilterEntityFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\LiipImagineConfigFixer;
@@ -108,7 +106,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ServiceDecoratorFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\ShippingCalculatorFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SonataBlockEventFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SwiftMailerFixer;
-use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\TranslationKeyFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\TwigHookFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UseWebpackConfigFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\UserEncoderFixer;
@@ -159,10 +156,9 @@ $analyzers = [
     new RemovedPaymentGatewayAnalyzer(),
     new ServiceDecoratorAnalyzer(),
     new OrderProcessorPriorityAnalyzer(),
-    new FormTypeExtensionPriorityAnalyzer(),
+    new RemovedFormTypeExtensionAnalyzer(),
     new BehatContextDeprecationAnalyzer(),
     new AdminMenuEventAnalyzer(),
-    new TranslationKeyAnalyzer(),
     new PromotionRuleCheckerAnalyzer(),
     new ShippingCalculatorAnalyzer(),
     new DoctrineXmlMappingAnalyzer(),
@@ -246,11 +242,9 @@ $fixers = [
     new RemovedConfigKeyFixer(),
 
     /* Fixers v1.4.0 — confiance moyenne */
-    new TranslationKeyFixer(),
     new BehatContextFixer(),
     new ApiSerializationGroupFixer(),
     new ApiQueryExtensionSignatureFixer(),
-    new FormTypeExtensionPriorityFixer(),
     new OrderProcessorPriorityFixer(),
     new DeprecatedEmailManagerFixer(),
     new AdminMenuEventFixer(),
@@ -273,7 +267,7 @@ $fixEngine = new FixEngine($fixers);
 
 $reportLoader = new ReportLoader();
 
-$application = new Application('sylius-upgrade-analyzer', '2.0.0');
+$application = new Application('sylius-upgrade-analyzer', '2.1.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
 $application->add(new MultiAnalyzeCommand($analyzers));
 $application->add(new CompareCommand($reportLoader));

@@ -472,6 +472,145 @@ PHP);
     }
 
     /**
+     * Verifie qu'une classe heritant du SDK Stripe moderne (stripe/stripe-php) n'est pas signalee.
+     */
+    #[Test]
+    public function testIgnoresClassExtendingModernStripeSdk(): void
+    {
+        $this->writeFile('src/Payment/AppStripeClient.php', <<<'PHP'
+<?php
+
+namespace App\Payment;
+
+use Stripe\StripeClient;
+
+final class AppStripeClient extends StripeClient
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new RemovedPaymentGatewayAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'une classe heritant d'une classe de sylius/paypal-plugin n'est pas signalee.
+     */
+    #[Test]
+    public function testIgnoresClassExtendingSyliusPaypalPluginClass(): void
+    {
+        $this->writeFile('src/Payment/PaypalPaymentCompleteProcessor.php', <<<'PHP'
+<?php
+
+namespace App\Payment;
+
+use Sylius\PayPalPlugin\Processor\PayPalPaymentCompleteProcessor as BasePaypalProcessor;
+
+final class PaypalPaymentCompleteProcessor extends BasePaypalProcessor
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new RemovedPaymentGatewayAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'une classe de payum/paypal-rest, passerelle que Sylius n'a jamais embarquee, n'est pas signalee.
+     */
+    #[Test]
+    public function testIgnoresPayumPaypalRestClass(): void
+    {
+        $this->writeFile('src/Payment/PaypalRestCapture.php', <<<'PHP'
+<?php
+
+namespace App\Payment;
+
+use Payum\Paypal\Rest\Action\CaptureAction;
+
+final class PaypalRestCapture extends CaptureAction
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new RemovedPaymentGatewayAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection d'une classe heritant d'une classe Payum Stripe importee sous un alias.
+     */
+    #[Test]
+    public function testDetectsClassExtendingAliasedPayumStripeClass(): void
+    {
+        $this->writeFile('src/Payment/StripeCapture.php', <<<'PHP'
+<?php
+
+namespace App\Payment;
+
+use Payum\Stripe\Action\Api\CreateChargeAction as BaseAction;
+
+final class StripeCapture extends BaseAction
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new RemovedPaymentGatewayAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Classe utilisant une passerelle Payum supprimee');
+
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('Payum\\Stripe\\Action\\Api\\CreateChargeAction', $issues[0]->getDetail());
+    }
+
+    /**
+     * Verifie qu'un nom de factory supprimee present seulement en commentaire ou dans un identifiant
+     * de service ne declenche aucune issue.
+     */
+    #[Test]
+    public function testIgnoresRemovedFactoryNameOutsideGatewayFactoryValue(): void
+    {
+        $this->writeFile('config/services.yaml', <<<'YAML'
+# Ancienne passerelle stripe_js remplacee par le plugin officiel.
+services:
+    app.payment.stripe_js_bridge:
+        class: App\Payment\StripeJsBridge
+        arguments:
+            $label: 'paypal_express_checkout migration'
+YAML);
+
+        $report = $this->createReport();
+        (new RemovedPaymentGatewayAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection du vrai nom du package PayPal supprime (payum/paypal-express-checkout-nvp).
+     */
+    #[Test]
+    public function testDetectsPaypalExpressCheckoutNvpPackage(): void
+    {
+        $this->writeComposerJson(['require' => ['payum/paypal-express-checkout-nvp' => '^1.7']]);
+
+        $analyzer = new RemovedPaymentGatewayAnalyzer();
+        $report = $this->createReport();
+
+        self::assertTrue($analyzer->supports($report));
+
+        $analyzer->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Dependance payum/paypal-express-checkout-nvp (^1.7)'));
+    }
+
+    /**
      * Ecrit composer.json a la racine du projet temporaire.
      *
      * @param array<string, mixed> $data Contenu du composer.json

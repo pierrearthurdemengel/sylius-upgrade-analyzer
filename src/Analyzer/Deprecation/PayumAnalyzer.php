@@ -29,6 +29,13 @@ final class PayumAnalyzer implements AnalyzerInterface
     /** Estimation en minutes par gateway standard */
     private const MINUTES_PER_STANDARD_GATEWAY = 120;
 
+    /**
+     * Estimation en minutes par fichier PHP dependant de Payum hors gateway factory
+     * (action Capture/Status/Notify, extension, requete) : chacun devient un handler
+     * de Payment Request, un travail comparable a la migration d'une gateway standard.
+     */
+    private const MINUTES_PER_PAYUM_DEPENDENT_FILE = 120;
+
     /** URL de la documentation Sylius sur les Payment Requests */
     private const DOC_URL = 'https://docs.sylius.com/migration-2.0/payment-requests';
 
@@ -75,12 +82,15 @@ final class PayumAnalyzer implements AnalyzerInterface
         /* Etape 2 : analyse des fichiers de configuration YAML */
         $standardGatewayCount = $this->analyzeYamlConfigurations($report, $projectPath);
 
-        /* Etape 3 : analyse des fichiers PHP pour les classes GatewayFactory */
-        $customGatewayCount = $this->analyzePhpUsages($report, $projectPath);
+        /* Etape 3 : analyse des fichiers PHP pour les classes GatewayFactory et les imports Payum */
+        $phpUsages = $this->analyzePhpUsages($report, $projectPath);
+        $customGatewayCount = $phpUsages['customGateways'];
+        $dependentFileCount = $phpUsages['dependentFiles'];
 
         /* Etape 4 : ajout d'un probleme global avec estimation */
         $totalMinutes = ($customGatewayCount * self::MINUTES_PER_CUSTOM_GATEWAY)
-            + ($standardGatewayCount * self::MINUTES_PER_STANDARD_GATEWAY);
+            + ($standardGatewayCount * self::MINUTES_PER_STANDARD_GATEWAY)
+            + ($dependentFileCount * self::MINUTES_PER_PAYUM_DEPENDENT_FILE);
 
         if ($totalMinutes > 0) {
             $report->addIssue(new MigrationIssue(
@@ -88,9 +98,11 @@ final class PayumAnalyzer implements AnalyzerInterface
                 category: Category::DEPRECATION,
                 analyzer: $this->getName(),
                 message: sprintf(
-                    'Migration Payum requise : %d gateway(s) standard et %d gateway(s) personnalisee(s)',
+                    'Migration Payum requise : %d gateway(s) standard, %d gateway(s) personnalisee(s) '
+                    . 'et %d autre(s) fichier(s) PHP dependant de Payum',
                     $standardGatewayCount,
                     $customGatewayCount,
+                    $dependentFileCount,
                 ),
                 detail: 'Sylius 2.0 remplace Payum par un systeme de Payment Requests. '
                     . 'Toutes les gateways de paiement doivent etre migrees vers le nouveau systeme.',
@@ -166,7 +178,7 @@ final class PayumAnalyzer implements AnalyzerInterface
             }
 
             try {
-                $config = Yaml::parseFile($filePath);
+                $config = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
             } catch (\Throwable) {
                 continue;
             }
@@ -211,14 +223,18 @@ final class PayumAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Analyse les fichiers PHP pour detecter les classes etendant GatewayFactory.
-     * Retourne le nombre de gateways personnalisees trouvees.
+     * Analyse les fichiers PHP pour detecter les classes etendant GatewayFactory et les imports Payum.
+     * Retourne le nombre de gateways personnalisees et le nombre d'autres fichiers important Payum.
+     * Un fichier contenant une gateway factory n'est compte qu'une fois, comme gateway personnalisee,
+     * car son estimation couvre deja ses imports.
+     *
+     * @return array{customGateways: int, dependentFiles: int}
      */
-    private function analyzePhpUsages(MigrationReport $report, string $projectPath): int
+    private function analyzePhpUsages(MigrationReport $report, string $projectPath): array
     {
         $srcDir = $projectPath . '/src';
         if (!is_dir($srcDir)) {
-            return 0;
+            return ['customGateways' => 0, 'dependentFiles' => 0];
         }
 
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
@@ -226,6 +242,7 @@ final class PayumAnalyzer implements AnalyzerInterface
         $finder->files()->in($srcDir)->name('*.php');
 
         $customGatewayCount = 0;
+        $dependentFileCount = 0;
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -273,17 +290,31 @@ final class PayumAnalyzer implements AnalyzerInterface
                     /* Detection des imports de classes Payum */
                     if ($node instanceof Node\Stmt\Use_) {
                         foreach ($node->uses as $use) {
-                            $fullName = $use->name->toString();
-                            if (str_starts_with($fullName, 'Payum\\')) {
-                                $this->payumUsages[] = [
-                                    'class' => $fullName,
-                                    'line' => $node->getStartLine(),
-                                ];
-                            }
+                            $this->recordPayumImport($use->name->toString(), $node->getStartLine());
+                        }
+                    }
+
+                    /* Imports groupes (use Payum\Core\{...}) : le nom complet est prefixe + element */
+                    if ($node instanceof Node\Stmt\GroupUse) {
+                        foreach ($node->uses as $use) {
+                            $this->recordPayumImport(
+                                Node\Name::concat($node->prefix, $use->name)?->toString() ?? '',
+                                $use->getStartLine(),
+                            );
                         }
                     }
 
                     return null;
+                }
+
+                private function recordPayumImport(string $fullName, int $line): void
+                {
+                    if (str_starts_with($fullName, 'Payum\\')) {
+                        $this->payumUsages[] = [
+                            'class' => $fullName,
+                            'line' => $line,
+                        ];
+                    }
                 }
             };
 
@@ -319,6 +350,10 @@ final class PayumAnalyzer implements AnalyzerInterface
                 ));
             }
 
+            if ($visitor->gatewayFactories === [] && $visitor->payumUsages !== []) {
+                $dependentFileCount++;
+            }
+
             /* Problemes pour les usages generaux de Payum */
             foreach ($visitor->payumUsages as $usage) {
                 $report->addIssue(new MigrationIssue(
@@ -342,6 +377,6 @@ final class PayumAnalyzer implements AnalyzerInterface
             }
         }
 
-        return $customGatewayCount;
+        return ['customGateways' => $customGatewayCount, 'dependentFiles' => $dependentFileCount];
     }
 }

@@ -17,8 +17,13 @@ use Symfony\Component\Finder\Finder;
 
 /**
  * Analyseur des renommages de bus de messages Sylius.
- * Sylius 2.0 renomme sylius_default.bus en sylius.command_bus et sylius_event.bus en sylius.event_bus.
+ * Sylius 2.0 supprime les bus sylius_default.bus et sylius_event.bus (UPGRADE-2.0.md, section Messenger),
+ * remplaces par sylius.command_bus et sylius.event_bus.
  * Cet analyseur detecte les references aux anciens noms de bus dans le code source et la configuration.
+ *
+ * Cote autowiring, Symfony derive le nom d'argument de l'identifiant du bus en camelCase :
+ * sylius_event.bus et sylius.event_bus donnent tous deux $syliusEventBus, qui reste donc valide.
+ * Seul $syliusDefaultBus (sylius_default.bus) doit devenir $syliusCommandBus.
  */
 final class MessageBusRenameAnalyzer implements AnalyzerInterface
 {
@@ -34,10 +39,9 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
         'sylius_event.bus',
     ];
 
-    /** Anciens noms de variables PHP references dans le code source */
+    /** Anciens noms d'arguments d'autowiring, associes a leur nom Sylius 2.0 */
     private const BUS_VARIABLES = [
-        '$syliusDefaultBus',
-        '$syliusEventBus',
+        '$syliusDefaultBus' => '$syliusCommandBus',
     ];
 
     public function getName(): string
@@ -67,8 +71,8 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
 
         foreach ($finder as $file) {
             $content = (string) file_get_contents((string) $file->getRealPath());
-            foreach (self::BUS_STRINGS as $busString) {
-                if (str_contains($content, $busString)) {
+            foreach ([...self::BUS_STRINGS, ...array_keys(self::BUS_VARIABLES)] as $needle) {
+                if (str_contains($content, $needle)) {
                     return true;
                 }
             }
@@ -101,8 +105,7 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
                 detail: 'Les bus de messages Sylius ont ete renommes dans Sylius 2.0. '
                     . 'sylius_default.bus devient sylius.command_bus et sylius_event.bus devient sylius.event_bus.',
                 suggestion: 'Renommer toutes les references : sylius_default.bus -> sylius.command_bus, '
-                    . 'sylius_event.bus -> sylius.event_bus, $syliusDefaultBus -> $syliusCommandBus, '
-                    . '$syliusEventBus -> $syliusEventBus.',
+                    . 'sylius_event.bus -> sylius.event_bus, $syliusDefaultBus -> $syliusCommandBus.',
                 docUrl: self::DOC_URL,
                 estimatedMinutes: $referenceCount * self::MINUTES_PER_REFERENCE,
             ));
@@ -221,7 +224,7 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            $busVariables = self::BUS_VARIABLES;
+            $busVariables = array_keys(self::BUS_VARIABLES);
             $visitor = new class ($busVariables) extends NodeVisitorAbstract {
                 /** @var list<array{variable: string, line: int}> */
                 public array $usages = [];
@@ -233,20 +236,13 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
 
                 public function enterNode(Node $node): null
                 {
-                    /* Detection des variables et parametres correspondant aux anciens noms */
+                    /*
+                     * Detection des variables correspondant aux anciens noms. Un parametre
+                     * de methode est couvert ici via sa variable enfant : traiter aussi le
+                     * noeud Param signalerait deux fois la meme occurrence.
+                     */
                     if ($node instanceof Node\Expr\Variable && is_string($node->name)) {
                         $varName = '$' . $node->name;
-                        if (in_array($varName, $this->targetVariables, true)) {
-                            $this->usages[] = [
-                                'variable' => $varName,
-                                'line' => $node->getStartLine(),
-                            ];
-                        }
-                    }
-
-                    /* Detection dans les parametres de methodes/constructeur */
-                    if ($node instanceof Node\Param && $node->var instanceof Node\Expr\Variable && is_string($node->var->name)) {
-                        $varName = '$' . $node->var->name;
                         if (in_array($varName, $this->targetVariables, true)) {
                             $this->usages[] = [
                                 'variable' => $varName,
@@ -265,9 +261,7 @@ final class MessageBusRenameAnalyzer implements AnalyzerInterface
 
             foreach ($visitor->usages as $usage) {
                 $totalReferences++;
-                $replacement = $usage['variable'] === '$syliusDefaultBus'
-                    ? '$syliusCommandBus'
-                    : '$syliusEventBus';
+                $replacement = self::BUS_VARIABLES[$usage['variable']] ?? $usage['variable'];
 
                 $report->addIssue(new MigrationIssue(
                     severity: Severity::WARNING,

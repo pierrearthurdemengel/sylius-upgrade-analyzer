@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
@@ -29,9 +30,13 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
     /** URL de la documentation de migration */
     private const DOC_URL = 'https://docs.sylius.com/migration-2.0';
 
-    /** Packages Payum supprimes */
+    /**
+     * Packages Payum supprimes. Le nom publie sur Packagist est payum/paypal-express-checkout-nvp
+     * (c'est lui que UPGRADE-2.0.md retire du composer.json) ; l'ancienne forme reste reconnue.
+     */
     private const REMOVED_PACKAGES = [
         'payum/stripe' => 'Stripe via Payum',
+        'payum/paypal-express-checkout-nvp' => 'PayPal Express Checkout via Payum',
         'payum/paypal-express-checkout' => 'PayPal Express Checkout via Payum',
     ];
 
@@ -40,6 +45,16 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
         'stripe_checkout',
         'stripe_js',
         'paypal_express_checkout',
+    ];
+
+    /**
+     * Espaces de noms des passerelles Payum retirees de Sylius 2.0 (payum/stripe et
+     * payum/paypal-express-checkout-nvp). Les autres classes "Stripe" ou "PayPal"
+     * (SDK stripe/stripe-php, sylius/paypal-plugin, payum/paypal-rest) ne sont pas concernees.
+     */
+    private const REMOVED_NAMESPACES = [
+        'Payum\\Stripe\\',
+        'Payum\\Paypal\\ExpressCheckout\\Nvp\\',
     ];
 
     public function getName(): string
@@ -182,10 +197,22 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            $content = (string) file_get_contents($filePath);
+            try {
+                $config = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!is_array($config)) {
+                continue;
+            }
+
+            /* Seules les valeurs de cle "factory" comptent : un commentaire ou un identifiant de
+               service contenant "stripe_js" ne configure aucune passerelle. */
+            $factories = $this->collectFactoryValues($config);
 
             foreach (self::REMOVED_GATEWAY_FACTORIES as $factoryName) {
-                if (str_contains($content, $factoryName)) {
+                if (in_array($factoryName, $factories, true)) {
                     $count++;
                     $report->addIssue(new MigrationIssue(
                         severity: Severity::BREAKING,
@@ -209,6 +236,29 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
         }
 
         return $count;
+    }
+
+    /**
+     * Collecte recursivement les valeurs scalaires des cles "factory" d'une configuration YAML.
+     * Le parcours recursif couvre payum.gateways.* comme les blocs when@env.
+     *
+     * @param array<mixed> $config Configuration parsee
+     *
+     * @return list<string>
+     */
+    private function collectFactoryValues(array $config): array
+    {
+        $factories = [];
+
+        foreach ($config as $key => $value) {
+            if ($key === 'factory' && is_string($value)) {
+                $factories[] = $value;
+            } elseif (is_array($value)) {
+                $factories = array_merge($factories, $this->collectFactoryValues($value));
+            }
+        }
+
+        return $factories;
     }
 
     /**
@@ -247,19 +297,24 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
             }
 
             /* Visiteur pour detecter les classes etendant ou utilisant des composants Payum Stripe/PayPal */
-            $visitor = new class () extends NodeVisitorAbstract {
+            $visitor = new class (self::REMOVED_NAMESPACES) extends NodeVisitorAbstract {
                 /** @var list<array{name: string, line: int, type: string}> */
                 public array $usages = [];
 
+                /**
+                 * @param list<string> $removedNamespaces Espaces de noms des passerelles supprimees
+                 */
+                public function __construct(private readonly array $removedNamespaces)
+                {
+                }
+
                 public function enterNode(Node $node): null
                 {
-                    /* Detection des imports Payum Stripe ou PayPal */
+                    /* Detection des imports Payum Stripe ou PayPal Express Checkout */
                     if ($node instanceof Node\Stmt\Use_) {
                         foreach ($node->uses as $use) {
                             $fullName = $use->name->toString();
-                            if (str_starts_with($fullName, 'Payum\\Stripe\\')
-                                || str_starts_with($fullName, 'Payum\\Paypal\\')
-                            ) {
+                            if ($this->isRemovedGatewayClass($fullName)) {
                                 $this->usages[] = [
                                     'name' => $fullName,
                                     'line' => $node->getStartLine(),
@@ -269,10 +324,11 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
                         }
                     }
 
-                    /* Detection de l'heritage de classes Payum */
+                    /* Detection de l'heritage de classes Payum : le NameResolver a remplace le parent
+                       par son nom pleinement qualifie, alias et imports compris. */
                     if ($node instanceof Node\Stmt\Class_ && $node->extends !== null) {
                         $parentName = $node->extends->toString();
-                        if (str_contains($parentName, 'Stripe') || str_contains($parentName, 'Paypal')) {
+                        if ($this->isRemovedGatewayClass($parentName)) {
                             $this->usages[] = [
                                 'name' => $parentName,
                                 'line' => $node->getStartLine(),
@@ -283,9 +339,22 @@ final class RemovedPaymentGatewayAnalyzer implements AnalyzerInterface
 
                     return null;
                 }
+
+                /** Indique si le nom pleinement qualifie appartient a une passerelle Payum supprimee. */
+                private function isRemovedGatewayClass(string $fullName): bool
+                {
+                    foreach ($this->removedNamespaces as $namespace) {
+                        if (str_starts_with($fullName, $namespace)) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
             };
 
             $traverser = new NodeTraverser();
+            $traverser->addVisitor(new NameResolver());
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 

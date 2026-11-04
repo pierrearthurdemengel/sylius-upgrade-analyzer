@@ -14,13 +14,14 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Component\Finder\Finder;
-use Symfony\Component\Yaml\Yaml;
 
 /**
- * Analyseur des configurations multi-boutique et multi-canal.
- * Sylius 2.0 modifie la gestion des canaux et du multi-store.
- * Cet analyseur detecte les configurations multi-canaux, les usages de findOneByHostname
- * et les contextes de locale personnalises.
+ * Analyseur de la resolution de canal et des contextes de canal/locale.
+ *
+ * ChannelRepositoryInterface::findOneByHostname(), depreciee depuis Sylius 1.11,
+ * est supprimee en 2.0 au profit de findOneEnabledByHostname() : tout appel restant
+ * provoque une erreur fatale. Les contextes de canal et de locale personnalises sont
+ * signales a titre d'avertissement, leurs dependances ayant change de signature en 2.0.
  */
 final class MultiStoreChannelAnalyzer implements AnalyzerInterface
 {
@@ -37,22 +38,13 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
 
     public function supports(MigrationReport $report): bool
     {
-        $configDir = $report->getProjectPath() . '/config';
-        if (!is_dir($configDir)) {
-            return false;
-        }
+        $projectPath = $report->getProjectPath();
 
-        $finder = new Finder();
-        $finder->files()->in($configDir)->name('*.yaml')->name('*.yml');
-
-        foreach ($finder as $file) {
-            $content = (string) file_get_contents((string) $file->getRealPath());
-            if (str_contains($content, 'sylius_channel') || str_contains($content, 'channels:')) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->filesContainAny(
+            $projectPath . '/src',
+            ['*.php'],
+            ['findOneByHostname', 'LocaleContextInterface', 'ChannelContextInterface'],
+        );
     }
 
     public function analyze(MigrationReport $report): void
@@ -60,16 +52,13 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
         $projectPath = $report->getProjectPath();
         $channelIssueCount = 0;
 
-        /* Etape 1 : detection des configurations multi-canaux */
-        $channelIssueCount += $this->analyzeChannelConfiguration($report, $projectPath);
-
-        /* Etape 2 : detection des usages de findOneByHostname */
+        /* Etape 1 : detection des usages de findOneByHostname */
         $channelIssueCount += $this->analyzeFindOneByHostnameUsages($report, $projectPath);
 
-        /* Etape 3 : detection des contextes de locale personnalises */
+        /* Etape 2 : detection des contextes de locale personnalises */
         $channelIssueCount += $this->analyzeCustomLocaleContexts($report, $projectPath);
 
-        /* Etape 4 : resume global */
+        /* Etape 3 : resume global */
         if ($channelIssueCount > 0) {
             $report->addIssue(new MigrationIssue(
                 severity: Severity::WARNING,
@@ -79,88 +68,14 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
                     '%d probleme(s) lie(s) au multi-store/multi-canal detecte(s)',
                     $channelIssueCount,
                 ),
-                detail: 'Sylius 2.0 modifie la gestion des canaux et du multi-store. '
-                    . 'Les configurations multi-canaux, les usages de findOneByHostname '
-                    . 'et les contextes de locale personnalises doivent etre adaptes.',
-                suggestion: 'Revoir la logique multi-canal pour utiliser les nouvelles API '
-                    . 'de gestion des canaux de Sylius 2.0.',
+                detail: 'Sylius 2.0 supprime ChannelRepositoryInterface::findOneByHostname() '
+                    . 'et modifie les dependances des contextes de canal et de locale.',
+                suggestion: 'Remplacer findOneByHostname() par findOneEnabledByHostname() '
+                    . 'et verifier les constructeurs des contextes personnalises.',
                 docUrl: self::DOC_URL,
                 estimatedMinutes: $channelIssueCount * self::MINUTES_PER_CHANNEL,
             ));
         }
-    }
-
-    /**
-     * Analyse la configuration des canaux dans config/.
-     * Detecte les configurations multi-canaux.
-     * Retourne le nombre de canaux detectes.
-     */
-    private function analyzeChannelConfiguration(MigrationReport $report, string $projectPath): int
-    {
-        $configDir = $projectPath . '/config';
-        if (!is_dir($configDir)) {
-            return 0;
-        }
-
-        $finder = new Finder();
-        $finder->files()->in($configDir)->name('*.yaml')->name('*.yml');
-
-        $count = 0;
-
-        foreach ($finder as $file) {
-            $filePath = $file->getRealPath();
-            if ($filePath === false) {
-                continue;
-            }
-
-            try {
-                $config = Yaml::parseFile($filePath);
-            } catch (\Throwable) {
-                continue;
-            }
-
-            if (!is_array($config)) {
-                continue;
-            }
-
-            /* Detection de la configuration sylius_channel */
-            $channelConfig = $config['sylius_channel'] ?? null;
-            if (!is_array($channelConfig)) {
-                continue;
-            }
-
-            /* Detection des definitions de canaux */
-            $channels = $channelConfig['channels'] ?? $channelConfig['resources'] ?? [];
-            if (!is_array($channels) || count($channels) <= 1) {
-                continue;
-            }
-
-            $channelCount = count($channels);
-            $count += $channelCount;
-
-            $report->addIssue(new MigrationIssue(
-                severity: Severity::WARNING,
-                category: Category::DEPRECATION,
-                analyzer: $this->getName(),
-                message: sprintf(
-                    'Configuration multi-canal detectee avec %d canaux dans %s',
-                    $channelCount,
-                    $file->getRelativePathname(),
-                ),
-                detail: sprintf(
-                    'Le fichier %s definit %d canaux. Les configurations multi-canaux '
-                    . 'sont impactees par les changements de Sylius 2.0.',
-                    $file->getRelativePathname(),
-                    $channelCount,
-                ),
-                suggestion: 'Revoir la configuration multi-canal pour s\'assurer de la compatibilite '
-                    . 'avec le nouveau systeme de gestion des canaux de Sylius 2.0.',
-                file: $filePath,
-                docUrl: self::DOC_URL,
-            ));
-        }
-
-        return $count;
     }
 
     /**
@@ -210,7 +125,8 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
 
                 public function enterNode(Node $node): null
                 {
-                    if ($node instanceof Node\Expr\MethodCall
+                    /* L'appel nullsafe ($repo?->findOneByHostname()) est un noeud distinct de MethodCall. */
+                    if (($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\NullsafeMethodCall)
                         && $node->name instanceof Node\Identifier
                         && $node->name->toString() === 'findOneByHostname'
                     ) {
@@ -230,7 +146,7 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
             foreach ($visitor->usages as $usage) {
                 $count++;
                 $report->addIssue(new MigrationIssue(
-                    severity: Severity::WARNING,
+                    severity: Severity::BREAKING,
                     category: Category::DEPRECATION,
                     analyzer: $this->getName(),
                     message: sprintf(
@@ -239,13 +155,13 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
                         $file->getRelativePathname(),
                     ),
                     detail: sprintf(
-                        'La methode findOneByHostname() dans %s (ligne %d) est depreciee dans Sylius 2.0. '
-                        . 'Le mecanisme de resolution de canal par hostname a change.',
+                        'La methode findOneByHostname() appelee dans %s (ligne %d), depreciee depuis Sylius 1.11, '
+                        . 'est supprimee de ChannelRepositoryInterface en 2.0 : tout appel provoque une erreur fatale.',
                         $file->getRelativePathname(),
                         $usage['line'],
                     ),
-                    suggestion: 'Remplacer findOneByHostname() par la nouvelle methode '
-                        . 'de resolution de canal de Sylius 2.0.',
+                    suggestion: 'Remplacer findOneByHostname() par findOneEnabledByHostname(), '
+                        . 'qui ne retourne que les canaux actives.',
                     file: $filePath,
                     line: $usage['line'],
                     docUrl: self::DOC_URL,
@@ -364,5 +280,33 @@ final class MultiStoreChannelAnalyzer implements AnalyzerInterface
         }
 
         return $count;
+    }
+
+    /**
+     * Indique si au moins un fichier du repertoire, filtre par motifs de nom,
+     * contient l'un des fragments donnes.
+     *
+     * @param list<string> $namePatterns Motifs de nom de fichier (ex. *.php)
+     * @param list<string> $needles      Fragments recherches
+     */
+    private function filesContainAny(string $directory, array $namePatterns, array $needles): bool
+    {
+        if (!is_dir($directory)) {
+            return false;
+        }
+
+        $finder = new Finder();
+        $finder->files()->in($directory)->name($namePatterns);
+
+        foreach ($finder as $file) {
+            $content = $file->getContents();
+            foreach ($needles as $needle) {
+                if (str_contains($content, $needle)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

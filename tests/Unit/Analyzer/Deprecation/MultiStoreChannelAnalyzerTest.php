@@ -7,7 +7,6 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Deprecation;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\MultiStoreChannelAnalyzer;
-use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
@@ -76,24 +75,15 @@ final class MultiStoreChannelAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie que supports retourne true quand sylius_channel est reference.
+     * Verifie qu'une simple configuration sylius_channel ne declenche plus l'analyse :
+     * aucun changement de configuration de canal n'est documente pour Sylius 2.0.
      */
     #[Test]
-    public function testSupportsReturnsTrueWithSyliusChannel(): void
+    public function testSupportsReturnsFalseForChannelConfigurationOnly(): void
     {
-        $configDir = $this->tempDir . '/config';
-        mkdir($configDir, 0755, true);
-        file_put_contents($configDir . '/sylius_channel.yaml', <<<'YAML'
-sylius_channel:
-    channels:
-        default: ~
-        fr: ~
-YAML);
+        $this->writeFile('config/packages/sylius_channel.yaml', "sylius_channel:\n    driver: doctrine/orm\n");
 
-        $analyzer = new MultiStoreChannelAnalyzer();
-        $report = $this->createReport();
-
-        self::assertTrue($analyzer->supports($report));
+        self::assertFalse((new MultiStoreChannelAnalyzer())->supports($this->createReport()));
     }
 
     /**
@@ -136,18 +126,13 @@ PHP);
     }
 
     /**
-     * Verifie que les problemes sont de severite WARNING.
+     * Verifie qu'un appel a findOneByHostname() est bloquant (methode supprimee en 2.0)
+     * tandis que la synthese reste un avertissement.
      */
     #[Test]
-    public function testCreatesWarningIssues(): void
+    public function testReportsFindOneByHostnameCallAsBreaking(): void
     {
-        $configDir = $this->tempDir . '/config';
-        mkdir($configDir, 0755, true);
-        file_put_contents($configDir . '/sylius_channel.yaml', "sylius_channel: ~\n");
-
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/ChannelResolver.php', <<<'PHP'
+        $this->writeFile('src/ChannelResolver.php', <<<'PHP'
 <?php
 
 namespace App;
@@ -161,14 +146,17 @@ class ChannelResolver
 }
 PHP);
 
-        $analyzer = new MultiStoreChannelAnalyzer();
         $report = $this->createReport();
+        (new MultiStoreChannelAnalyzer())->analyze($report);
 
-        $analyzer->analyze($report);
+        $calls = $this->issuesWithMessage($report, 'Utilisation de findOneByHostname()');
+        $summary = $this->issuesWithMessage($report, 'probleme(s) lie(s) au multi-store/multi-canal');
 
-        foreach ($report->getIssues() as $issue) {
-            self::assertSame(Severity::WARNING, $issue->getSeverity());
-        }
+        self::assertCount(1, $calls);
+        self::assertSame(Severity::BREAKING, $calls[0]->getSeverity());
+        self::assertStringContainsString('findOneEnabledByHostname()', $calls[0]->getSuggestion());
+        self::assertCount(1, $summary);
+        self::assertSame(Severity::WARNING, $summary[0]->getSeverity());
     }
 
     /**
@@ -180,17 +168,6 @@ PHP);
         $analyzer = new MultiStoreChannelAnalyzer();
 
         self::assertSame('Multi-Store Channel', $analyzer->getName());
-    }
-
-    /**
-     * Verifie que supports retourne true quand un fichier .yml declare une cle channels.
-     */
-    #[Test]
-    public function testSupportsReturnsTrueWithChannelsKeyInYml(): void
-    {
-        $this->writeFile('config/packages/app.yml', "parameters:\n    channels:\n        - FASHION_WEB\n");
-
-        self::assertTrue((new MultiStoreChannelAnalyzer())->supports($this->createReport()));
     }
 
     /**
@@ -218,56 +195,25 @@ PHP);
     }
 
     /**
-     * Verifie la detection d'une configuration declarant plusieurs canaux, avec leur nombre.
+     * Verifie que la cle sylius_channel.channels est ignoree : elle n'existe pas dans la
+     * configuration de SyliusChannelBundle (les canaux sont des entites en base).
      */
     #[Test]
-    public function testDetectsMultiChannelConfiguration(): void
+    public function testIgnoresNonExistentSyliusChannelChannelsKey(): void
     {
-        $configFile = $this->writeFile('config/packages/sylius_channel.yaml', <<<'YAML'
+        $this->writeFile('config/packages/sylius_channel.yaml', <<<'YAML'
 sylius_channel:
     channels:
         FASHION_WEB:
             hostname: fashion.example.com
         FASHION_B2B:
             hostname: pro.fashion.example.com
-        FASHION_DE:
-            hostname: fashion.example.de
 YAML);
 
         $report = $this->createReport();
         (new MultiStoreChannelAnalyzer())->analyze($report);
 
-        $issues = $this->issuesWithMessage($report, 'Configuration multi-canal detectee avec 3 canaux');
-
-        self::assertCount(1, $issues);
-        self::assertStringContainsString('sylius_channel.yaml', $issues[0]->getMessage());
-        self::assertSame(realpath($configFile), realpath((string) $issues[0]->getFile()));
-        self::assertSame(Category::DEPRECATION, $issues[0]->getCategory());
-        self::assertStringContainsString('3 canaux', $issues[0]->getDetail());
-    }
-
-    /**
-     * Verifie que la synthese estime 240 minutes par canal configure.
-     */
-    #[Test]
-    public function testSummaryEstimatesFourHoursPerChannel(): void
-    {
-        $this->writeFile('config/packages/sylius_channel.yml', <<<'YAML'
-sylius_channel:
-    channels:
-        FASHION_WEB: ~
-        FASHION_B2B: ~
-YAML);
-
-        $report = $this->createReport();
-        (new MultiStoreChannelAnalyzer())->analyze($report);
-
-        $summary = $this->issuesWithMessage($report, '2 probleme(s) lie(s) au multi-store/multi-canal');
-
-        self::assertCount(1, $summary);
-        self::assertSame(480, $summary[0]->getEstimatedMinutes());
-        self::assertNull($summary[0]->getFile());
-        self::assertCount(2, $report->getIssues());
+        self::assertSame([], $report->getIssues());
     }
 
     /**
@@ -493,12 +439,11 @@ PHP);
     }
 
     /**
-     * Verifie que la synthese cumule canaux, appels findOneByHostname et contextes personnalises.
+     * Verifie que la synthese cumule appels findOneByHostname et contextes personnalises.
      */
     #[Test]
-    public function testSummaryAggregatesChannelsHostnameCallsAndContexts(): void
+    public function testSummaryAggregatesHostnameCallsAndContexts(): void
     {
-        $this->writeFile('config/packages/sylius_channel.yaml', "sylius_channel:\n    channels:\n        FASHION_WEB: ~\n        FASHION_B2B: ~\n");
         $this->writeFile('src/Context/RequestChannelContext.php', <<<'PHP'
 <?php
 
@@ -518,11 +463,117 @@ PHP);
         $report = $this->createReport();
         (new MultiStoreChannelAnalyzer())->analyze($report);
 
-        $summary = $this->issuesWithMessage($report, '4 probleme(s) lie(s) au multi-store/multi-canal');
+        $summary = $this->issuesWithMessage($report, '2 probleme(s) lie(s) au multi-store/multi-canal');
 
         self::assertCount(1, $summary);
-        self::assertSame(960, $summary[0]->getEstimatedMinutes());
-        self::assertCount(4, $report->getIssues());
+        self::assertSame(480, $summary[0]->getEstimatedMinutes());
+        self::assertCount(3, $report->getIssues());
+    }
+
+    /**
+     * Verifie que les entrees de sylius_channel.resources (classes de modeles, pas des canaux)
+     * ne sont pas comptees comme une configuration multi-canal, meme lorsqu'il y en a plusieurs.
+     */
+    #[Test]
+    public function testIgnoresSyliusChannelResourcesConfiguration(): void
+    {
+        $this->writeFile('config/packages/_sylius.yaml', <<<'YAML'
+sylius_channel:
+    driver: doctrine/orm
+    resources:
+        channel:
+            classes:
+                model: App\Entity\Channel\Channel
+        channel_pricing:
+            classes:
+                model: App\Entity\Channel\ChannelPricing
+YAML);
+
+        $report = $this->createReport();
+        (new MultiStoreChannelAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection d'un appel nullsafe a findOneByHostname.
+     */
+    #[Test]
+    public function testDetectsNullsafeFindOneByHostnameCall(): void
+    {
+        $this->writeFile('src/Context/OptionalHostnameResolver.php', <<<'PHP'
+<?php
+
+namespace App\Context;
+
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
+
+final class OptionalHostnameResolver
+{
+    public function __construct(private ?ChannelRepositoryInterface $channelRepository)
+    {
+    }
+
+    public function resolve(string $hostname): ?object
+    {
+        return $this->channelRepository?->findOneByHostname($hostname);
+    }
+}
+PHP);
+
+        $report = $this->createReport();
+        (new MultiStoreChannelAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Utilisation de findOneByHostname()');
+
+        self::assertCount(1, $issues);
+        self::assertSame(15, $issues[0]->getLine());
+    }
+
+    /**
+     * Verifie que supports retourne true pour un projet appelant findOneByHostname
+     * sans aucune mention de canal dans sa configuration.
+     */
+    #[Test]
+    public function testSupportsProjectCallingFindOneByHostnameWithoutChannelConfiguration(): void
+    {
+        $this->writeFile('config/packages/framework.yaml', "framework:\n    secret: '%env(APP_SECRET)%'\n");
+        $this->writeFile('src/Context/HostnameResolver.php', <<<'PHP'
+<?php
+
+namespace App\Context;
+
+final class HostnameResolver
+{
+    public function resolve($repository, string $host)
+    {
+        return $repository->findOneByHostname($host);
+    }
+}
+PHP);
+
+        self::assertTrue((new MultiStoreChannelAnalyzer())->supports($this->createReport()));
+    }
+
+    /**
+     * Verifie que supports retourne true pour un projet sans config/ implementant un contexte de canal.
+     */
+    #[Test]
+    public function testSupportsProjectImplementingChannelContextWithoutConfigDir(): void
+    {
+        $this->writeFile('src/Context/SubdomainChannelContext.php', <<<'PHP'
+<?php
+
+namespace App\Context;
+
+use Sylius\Component\Channel\Context\ChannelContextInterface;
+
+final class SubdomainChannelContext implements ChannelContextInterface
+{
+}
+PHP);
+
+        self::assertTrue((new MultiStoreChannelAnalyzer())->supports($this->createReport()));
     }
 
     /**

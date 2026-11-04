@@ -67,7 +67,7 @@ final class UserEncoderAnalyzer implements AnalyzerInterface
             }
 
             try {
-                $config = Yaml::parseFile($securityPath);
+                $config = Yaml::parseFile($securityPath, Yaml::PARSE_CUSTOM_TAGS);
             } catch (\Throwable) {
                 continue;
             }

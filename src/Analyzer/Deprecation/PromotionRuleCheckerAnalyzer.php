@@ -244,7 +244,7 @@ final class PromotionRuleCheckerAnalyzer implements AnalyzerInterface
             }
 
             try {
-                $config = Yaml::parseFile($filePath);
+                $config = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
             } catch (\Throwable) {
                 continue;
             }

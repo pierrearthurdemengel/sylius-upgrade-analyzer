@@ -168,6 +168,60 @@ final class PackagistClientTest extends TestCase
     }
 
     /**
+     * Vérifie qu'une contrainte n'est jugée compatible que si l'ensemble des versions
+     * qu'elle autorise intersecte l'intervalle [2.0.0, 3.0.0[ de la majeure cible.
+     */
+    #[Test]
+    #[DataProvider('constraintIntersectionProvider')]
+    public function testEvaluatesConstraintAgainstTargetMajorInterval(string $constraint, PluginCompatibilityStatus $expected): void
+    {
+        $client = $this->createClient($this->packageWithVersions([
+            'v1.6.0' => ['require' => ['sylius/sylius' => $constraint]],
+        ]));
+
+        $result = $client->checkCompatibility('bitbag/wishlist-plugin', '2.0');
+
+        self::assertSame($expected, $result->status);
+    }
+
+    /**
+     * Contraintes Composer et statut attendu pour une cible Sylius 2.0.
+     *
+     * @return iterable<string, array{string, PluginCompatibilityStatus}>
+     */
+    public static function constraintIntersectionProvider(): iterable
+    {
+        $compatible = PluginCompatibilityStatus::COMPATIBLE;
+        $incompatible = PluginCompatibilityStatus::INCOMPATIBLE;
+
+        yield '^2.0' => ['^2.0', $compatible];
+        yield '~2.1' => ['~2.1', $compatible];
+        yield '2.*' => ['2.*', $compatible];
+        yield 'joker seul' => ['*', $compatible];
+        yield '^1.12|^2.0' => ['^1.12|^2.0', $compatible];
+        yield '>=2.0 <2.1' => ['>=2.0 <2.1', $compatible];
+        yield '>=1.0 <3.0 englobe la majeure' => ['>=1.0 <3.0', $compatible];
+        yield '>=1.12 ouvert' => ['>=1.12', $compatible];
+        yield '!=2.0 seul autorise 2.1' => ['!=2.0', $compatible];
+        yield 'operateur separe par un espace' => ['>= 2.0', $compatible];
+        yield 'conjonction par virgule' => ['>=1.12,<2.1', $compatible];
+        yield 'plage avec tiret' => ['1.0 - 2.0', $compatible];
+        yield 'prefixe v' => ['v2.0.0', $compatible];
+        yield 'drapeau de stabilite' => ['^2.0@beta', $compatible];
+        yield '^1.12 <2.0' => ['^1.12 <2.0', $incompatible];
+        yield '<2.0' => ['<2.0', $incompatible];
+        yield '^1.12 !=2.0' => ['^1.12 !=2.0', $incompatible];
+        yield 'point exclu' => ['2.0.0 !=2.0.0', $incompatible];
+        yield '1.12.*' => ['1.12.*', $incompatible];
+        yield '^3.0' => ['^3.0', $incompatible];
+        yield '>=3.0' => ['>=3.0', $incompatible];
+        yield 'plage avec tiret sous la majeure' => ['1.0 - 1.14', $incompatible];
+        yield 'conjonction vide' => ['^2.0 <2.0', $incompatible];
+        yield 'borne exclusive' => ['>3.0 <=3.0', $incompatible];
+        yield 'contrainte illisible' => ['self.version', $incompatible];
+    }
+
+    /**
      * Vérifie que la version majeure cible est extraite malgré un préfixe (v, ^, ~).
      */
     #[Test]

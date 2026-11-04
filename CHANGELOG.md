@@ -7,6 +7,39 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-04
+
+Version consacrée à la fiabilité du diagnostic : chaque détection a été confrontée à UPGRADE-2.0.md
+et aux sources de Sylius 2.0. Les contrôles reposant sur des changements inexistants ont été retirés.
+
+### Added
+- `ResourceBundleAnalyzer` : détection des classes qui étendent un repository Sylius concret (par exemple `ProductRepository`), des interfaces `Sylius\Resource\*` (ResourceBundle 1.11+) et des surcharges de services déclarées en XML
+- `GridCustomizationAnalyzer` : détection des templates d'action personnalisés (`sylius_grid.templates.action`)
+- `MultiStoreChannelAnalyzer` : détection des appels nullsafe `?->findOneByHostname()`
+- `PayumAnalyzer` : estimation des fichiers dépendant de Payum et prise en charge des imports groupés
+- `RemovedFormTypeExtensionAnalyzer` : détection des références aux services `sylius.form.extension.type.country`, `.customer` et `.locale`, supprimés en 2.0
+- Seuil de couverture de 80 % bloquant dans la CI ; la suite passe de 668 à 843 tests
+
+### Changed
+- `FormTypeExtensionPriorityAnalyzer` devient `RemovedFormTypeExtensionAnalyzer` : il signale comme bloquantes les classes qui héritent des cinq extensions de formulaire supprimées en 2.0, au lieu des tags `form.type_extension` sans priorité, une obligation qui n'existe pas
+- Les appels à `findOneByHostname()`, supprimée en 2.0, sont désormais bloquants et la correction proposée est `findOneEnabledByHostname()`
+- La CI installe les dépendances depuis `composer.lock` ; les jobs Symfony 6.4 testent réellement Symfony 6.4 (ils installaient Symfony 7.4)
+
+### Fixed
+- Les fichiers YAML contenant une balise personnalisée (`!tagged_iterator`, `!service`...) étaient entièrement ignorés par les analyseurs
+- Imports avec alias non reconnus et faux positif sur `Doctrine\ORM\EntityRepository` (ResourceBundle, Grid)
+- `GridCustomizationAnalyzer` cherchait des interfaces inexistantes (`ColumnTypeInterface`, `FilterTypeInterface`, `ActionTypeInterface`) au lieu de `FieldTypeInterface` et `FilterInterface`
+- `PackagistClient` évalue les contraintes de version comme des intervalles : `^1.12 <2.0` n'est plus jugé compatible Sylius 2, `>=1.0 <3.0` l'est
+- `RemovedPaymentGatewayAnalyzer` ne signale plus toute classe dont le nom contient « Stripe » ou « Paypal », ni un nom de factory cité en commentaire
+- `MessageBusRenameAnalyzer` comptait deux fois les paramètres de constructeur et proposait de renommer `$syliusEventBus` en lui-même
+- `CustomFixtureAnalyzer` estimait les fixtures Doctrine comme des fixtures Sylius et comptait deux fois les suites déclarées en `.yaml` et `.yml`
+- `MultiStoreChannelAnalyzer` interprétait `sylius_channel.resources`, puis la clé inexistante `sylius_channel.channels`, comme une liste de canaux
+- Compteurs du README : 48 analyseurs et 41 auto-fixers
+
+### Removed
+- `TranslationKeyAnalyzer` et `TranslationKeyFixer` : les renommages de préfixes signalés (`sylius.ui.shop`, `sylius.email`, `sylius.form.channel`...) n'existent pas dans Sylius 2.0, et le fixer réécrivait les clés du projet vers des préfixes inexistants
+- `FormTypeExtensionPriorityFixer`, qui ajoutait une méthode `getPriority()` absente de l'API Form de Symfony
+
 ## [2.0.0] - 2026-11-04
 
 L'outil fonctionne désormais entièrement en local : toutes les dépendances au service hébergé ont été retirées et la génération PDF est intégrée à la CLI.
