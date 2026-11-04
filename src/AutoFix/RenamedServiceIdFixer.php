@@ -14,25 +14,22 @@ final class RenamedServiceIdFixer implements AutoFixInterface
 {
     private const TARGET_ANALYZER = 'Renamed Service ID';
 
-    /** Mapping des anciens identifiants vers les nouveaux */
-    private const SERVICE_ID_MAPPING = [
+    /**
+     * Renommages repris mot pour mot des tableaux de UPGRADE-2.0.md (ancien => nouveau).
+     * Les identifiants sylius.console.command.* sont deja les noms de Sylius 2.0 : ils ne
+     * doivent pas etre renommes.
+     */
+    public const SERVICE_ID_MAPPING = [
         'sylius.twig.extension.sort_by' => 'sylius_twig_extra.twig.extension.sort_by',
-        'sylius.twig.extension.test_form_attribute' => 'sylius_twig_extra.twig.extension.test_form_attribute',
-        'sylius.twig.extension.test_html_attribute' => 'sylius_twig_extra.twig.extension.test_html_attribute',
-        'sylius.console.command.cancel_unpaid_orders' => 'sylius_order.console.command.cancel_unpaid_orders',
-        'sylius.console.command.install' => 'sylius_core.console.command.install',
-        'sylius.console.command.setup' => 'sylius_core.console.command.setup',
-        'sylius.console.command.show_available_plugins' => 'sylius_core.console.command.show_available_plugins',
-        'sylius.console.command.debug_currency' => 'sylius_currency.console.command.debug_currency',
-        'sylius.mailer.shipment_email_manager' => 'sylius_core.mailer.shipment_email_manager',
-        'sylius.mailer.order_email_manager' => 'sylius_core.mailer.order_email_manager',
-        'sylius.mailer.contact_email_manager' => 'sylius_core.mailer.contact_email_manager',
-    ];
-
-    /** Mapping des préfixes de services renommés */
-    private const PREFIX_MAPPING = [
-        'sylius.controller.admin.' => 'sylius_admin.controller.',
-        'sylius.controller.shop.' => 'sylius_shop.controller.',
+        'sylius.province_naming_provider' => 'sylius.provider.province_naming',
+        'sylius.zone_matcher' => 'sylius.matcher.zone',
+        'sylius.address_comparator' => 'sylius.comparator.address',
+        'sylius.controller.admin.dashboard' => 'sylius_admin.controller.dashboard',
+        'sylius.controller.shop.contact' => 'sylius_shop.controller.contact',
+        'sylius.controller.shop.currency_switch' => 'sylius_shop.controller.currency_switch',
+        'sylius.controller.shop.locale_switch' => 'sylius_shop.controller.locale_switch',
+        'sylius.controller.shop.register_thank_you' => 'sylius_shop.controller.register_thank_you',
+        'sylius.form_registry.payum_gateway_config' => 'sylius.form_registry.payment_gateway_config',
     ];
 
     public function getName(): string
@@ -69,14 +66,13 @@ final class RenamedServiceIdFixer implements AutoFixInterface
         $originalContent = (string) file_get_contents($absolutePath);
         $fixedContent = $originalContent;
 
-        /* Remplacement des IDs exacts */
+        /* Identifiant complet uniquement : sylius.zone_matcher_custom n'est pas sylius.zone_matcher */
         foreach (self::SERVICE_ID_MAPPING as $oldId => $newId) {
-            $fixedContent = str_replace($oldId, $newId, $fixedContent);
-        }
-
-        /* Remplacement des préfixes */
-        foreach (self::PREFIX_MAPPING as $oldPrefix => $newPrefix) {
-            $fixedContent = str_replace($oldPrefix, $newPrefix, $fixedContent);
+            $fixedContent = (string) preg_replace(
+                '/(?<![\w.])' . preg_quote($oldId, '/') . '(?![\w.])/',
+                $newId,
+                $fixedContent,
+            );
         }
 
         if ($fixedContent === $originalContent) {

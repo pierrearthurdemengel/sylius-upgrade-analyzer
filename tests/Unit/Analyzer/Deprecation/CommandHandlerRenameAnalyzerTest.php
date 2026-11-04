@@ -8,10 +8,10 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\CommandHandlerRenameAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
+use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
 /**
- * Tests unitaires pour l'analyseur de renommage Command/Handler.
- * Verifie la detection du repertoire src/Message/ et des classes *MessageHandler.
+ * Tests de la detection des classes Message* de Sylius renommees en Command*.
  */
 final class CommandHandlerRenameAnalyzerTest extends TestCase
 {
@@ -19,129 +19,109 @@ final class CommandHandlerRenameAnalyzerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/test_' . uniqid('cmdhandler_', true);
-        mkdir($this->tempDir, 0755, true);
+        $this->tempDir = sys_get_temp_dir() . '/command-rename-' . uniqid('', true);
+        mkdir($this->tempDir . '/src/Message', 0755, true);
     }
 
     protected function tearDown(): void
     {
-        $this->removeDirectory($this->tempDir);
-    }
-
-    private function removeDirectory(string $path): void
-    {
-        if (!is_dir($path)) {
-            return;
-        }
-
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS),
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->tempDir, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir((string) $item->getRealPath());
-            } else {
-                unlink((string) $item->getRealPath());
-            }
+        ) as $item) {
+            /** @var \SplFileInfo $item */
+            $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
         }
-
-        rmdir($path);
+        rmdir($this->tempDir);
     }
 
-    private function createReport(): MigrationReport
+    private function analyze(): MigrationReport
     {
-        return new MigrationReport(
-            startedAt: new \DateTimeImmutable(),
-            detectedSyliusVersion: '1.12',
-            targetVersion: '2.0',
-            projectPath: $this->tempDir,
+        $report = new MigrationReport(new \DateTimeImmutable(), '1.14.0', '2.2', $this->tempDir);
+        (new CommandHandlerRenameAnalyzer())->analyze($report);
+
+        return $report;
+    }
+
+    #[Test]
+    public function testFlagsReferencesToRenamedSyliusNamespaces(): void
+    {
+        file_put_contents($this->tempDir . '/src/OrderController.php', <<<'PHP'
+<?php
+
+namespace App\Controller;
+
+use Sylius\Bundle\CoreBundle\Message\ResendOrderConfirmationEmail;
+use Sylius\Bundle\CoreBundle\MessageDispatcher\ResendShipmentConfirmationEmailDispatcherInterface;
+
+final class OrderController
+{
+    public function __construct(private ResendShipmentConfirmationEmailDispatcherInterface $dispatcher)
+    {
+        new ResendOrderConfirmationEmail('000042');
+    }
+}
+PHP);
+
+        $issues = $this->analyze()->getIssues();
+
+        self::assertCount(2, $issues);
+        self::assertSame(Severity::BREAKING, $issues[0]->getSeverity());
+        self::assertSame(
+            'Classe Sylius\Bundle\CoreBundle\Message\ResendOrderConfirmationEmail deplacee vers Sylius\Bundle\CoreBundle\Command\ResendOrderConfirmationEmail',
+            $issues[0]->getMessage(),
         );
+        self::assertSame(5, $issues[0]->getLine());
+        self::assertStringContainsString('CoreBundle\CommandDispatcher\ResendShipmentConfirmationEmailDispatcherInterface', $issues[1]->getMessage());
     }
 
-    /**
-     * Verifie que supports retourne false pour un projet sans src/Message/ ni *MessageHandler.
-     */
     #[Test]
-    public function testSupportsReturnsFalseForEmptyProject(): void
+    public function testIgnoresProjectOwnMessageNamespace(): void
     {
-        $analyzer = new CommandHandlerRenameAnalyzer();
-        $report = $this->createReport();
+        /* Le dossier src/Message du projet n'est pas concerne par la montee de version */
+        file_put_contents($this->tempDir . '/src/Message/SendNewsletter.php', <<<'PHP'
+<?php
 
-        self::assertFalse($analyzer->supports($report));
+namespace App\Message;
+
+final class SendNewsletter
+{
+}
+PHP);
+        file_put_contents($this->tempDir . '/src/SendNewsletterMessageHandler.php', <<<'PHP'
+<?php
+
+namespace App;
+
+use App\Message\SendNewsletter;
+
+final class SendNewsletterMessageHandler
+{
+    public function __invoke(SendNewsletter $message): void
+    {
+    }
+}
+PHP);
+
+        self::assertSame([], $this->analyze()->getIssues());
     }
 
-    /**
-     * Verifie que supports retourne true quand src/Message/ existe.
-     */
     #[Test]
-    public function testSupportsReturnsTrueWithMessageDirectory(): void
+    public function testRenamedKeepsShortClassName(): void
     {
-        $messageDir = $this->tempDir . '/src/Message';
-        mkdir($messageDir, 0755, true);
-        file_put_contents($messageDir . '/SendOrder.php', '<?php class SendOrder {}');
-
-        $analyzer = new CommandHandlerRenameAnalyzer();
-        $report = $this->createReport();
-
-        self::assertTrue($analyzer->supports($report));
-    }
-
-    /**
-     * Verifie la detection des fichiers dans src/Message/.
-     */
-    #[Test]
-    public function testDetectsMessageDirectoryFiles(): void
-    {
-        $messageDir = $this->tempDir . '/src/Message';
-        mkdir($messageDir, 0755, true);
-        file_put_contents($messageDir . '/SendOrder.php', "<?php\nnamespace App\\Message;\nclass SendOrder {}\n");
-
-        $analyzer = new CommandHandlerRenameAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        /* Un probleme devrait mentionner le deplacement depuis src/Message/ */
-        $moveIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'src/Message/'),
+        self::assertSame(
+            'Sylius\Bundle\AdminBundle\CommandHandler\Notification\SendNotificationHandler',
+            CommandHandlerRenameAnalyzer::renamed('Sylius\Bundle\AdminBundle\MessageHandler\Notification\SendNotificationHandler'),
         );
-        self::assertNotEmpty($moveIssues);
+        self::assertSame('App\Message\Foo', CommandHandlerRenameAnalyzer::renamed('App\Message\Foo'));
     }
 
-    /**
-     * Verifie la detection des classes *MessageHandler.
-     */
     #[Test]
-    public function testDetectsMessageHandlerClasses(): void
+    public function testSupportsProjectsWithSourceDirectory(): void
     {
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/SendOrderMessageHandler.php', "<?php\nnamespace App;\nclass SendOrderMessageHandler {}\n");
+        $report = new MigrationReport(new \DateTimeImmutable(), '1.14.0', '2.2', $this->tempDir);
 
-        $analyzer = new CommandHandlerRenameAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        /* Un probleme devrait mentionner le renommage en CommandHandler */
-        $renameIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'CommandHandler'),
-        );
-        self::assertNotEmpty($renameIssues);
-    }
-
-    /**
-     * Verifie que getName retourne le nom attendu.
-     */
-    #[Test]
-    public function testGetNameReturnsExpected(): void
-    {
-        $analyzer = new CommandHandlerRenameAnalyzer();
-
-        self::assertSame('Command Handler Rename', $analyzer->getName());
+        self::assertTrue((new CommandHandlerRenameAnalyzer())->supports($report));
+        self::assertSame('Command Handler Rename', (new CommandHandlerRenameAnalyzer())->getName());
     }
 }

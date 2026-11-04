@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
@@ -16,17 +17,31 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Component\Finder\Finder;
 
 /**
- * Analyseur des renommages de commandes et handlers.
- * Sylius 2.0 renomme le repertoire Message/ en Command/ et les classes *MessageHandler en *CommandHandler.
- * Cet analyseur detecte les anciennes conventions de nommage a adapter.
+ * Detecte les references aux classes des dossiers Message, MessageHandler et
+ * MessageDispatcher d'AdminBundle et CoreBundle, renommes en Command, CommandHandler et
+ * CommandDispatcher en Sylius 2.0 (UPGRADE-2.0.md, Architecture changes).
+ *
+ * Les 18 classes concernees gardent leur nom court : seul l'espace de noms change. Le code
+ * du projet (src/Message/, *MessageHandler) n'est pas concerne et n'est pas signale.
  */
 final class CommandHandlerRenameAnalyzer implements AnalyzerInterface
 {
-    /** Estimation en minutes par fichier necessitant un renommage */
-    private const MINUTES_PER_FILE = 30;
+    private const MINUTES_PER_FILE = 15;
 
-    /** URL de la documentation de migration */
-    private const DOC_URL = 'https://docs.sylius.com/migration-2.0';
+    private const DOC_URL = 'https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md#architecture-changes';
+
+    /**
+     * Ancien espace de noms => nouveau, verifies classe par classe entre 1.14 et 2.0.
+     *
+     * @var array<string, string>
+     */
+    public const RENAMED_NAMESPACES = [
+        'Sylius\\Bundle\\AdminBundle\\MessageHandler\\' => 'Sylius\\Bundle\\AdminBundle\\CommandHandler\\',
+        'Sylius\\Bundle\\AdminBundle\\Message\\' => 'Sylius\\Bundle\\AdminBundle\\Command\\',
+        'Sylius\\Bundle\\CoreBundle\\MessageDispatcher\\' => 'Sylius\\Bundle\\CoreBundle\\CommandDispatcher\\',
+        'Sylius\\Bundle\\CoreBundle\\MessageHandler\\' => 'Sylius\\Bundle\\CoreBundle\\CommandHandler\\',
+        'Sylius\\Bundle\\CoreBundle\\Message\\' => 'Sylius\\Bundle\\CoreBundle\\Command\\',
+    ];
 
     public function getName(): string
     {
@@ -35,162 +50,19 @@ final class CommandHandlerRenameAnalyzer implements AnalyzerInterface
 
     public function supports(MigrationReport $report): bool
     {
-        $projectPath = $report->getProjectPath();
-
-        /* Verification de l'existence du repertoire src/Message/ */
-        if (is_dir($projectPath . '/src/Message')) {
-            return true;
-        }
-
-        /* Verification de la presence de classes *MessageHandler dans src/ */
-        $srcDir = $projectPath . '/src';
-        if (!is_dir($srcDir)) {
-            return false;
-        }
-
-        $finder = new Finder();
-        $finder->files()->in($srcDir)->name('*MessageHandler.php');
-
-        return $finder->hasResults();
+        return is_dir($report->getProjectPath() . '/src');
     }
 
     public function analyze(MigrationReport $report): void
     {
-        $projectPath = $report->getProjectPath();
-        $fileCount = 0;
-
-        /* Etape 1 : detection du repertoire src/Message/ */
-        $fileCount += $this->analyzeMessageDirectory($report, $projectPath);
-
-        /* Etape 2 : detection des classes *MessageHandler */
-        $fileCount += $this->analyzeMessageHandlerClasses($report, $projectPath);
-
-        /* Etape 3 : detection des injections de MessageDispatcherInterface */
-        $fileCount += $this->analyzeMessageDispatcherUsages($report, $projectPath);
-
-        /* Etape 4 : resume global */
-        if ($fileCount > 0) {
-            $report->addIssue(new MigrationIssue(
-                severity: Severity::WARNING,
-                category: Category::DEPRECATION,
-                analyzer: $this->getName(),
-                message: sprintf(
-                    '%d fichier(s) necessitant un renommage Command/Handler detecte(s)',
-                    $fileCount,
-                ),
-                detail: 'Sylius 2.0 renomme le namespace Message en Command et les classes '
-                    . '*MessageHandler en *CommandHandler. Les injections de MessageDispatcherInterface '
-                    . 'doivent etre remplacees par CommandDispatcherInterface.',
-                suggestion: 'Renommer le repertoire src/Message/ en src/Command/, renommer les classes '
-                    . '*MessageHandler en *CommandHandler et remplacer MessageDispatcherInterface '
-                    . 'par CommandDispatcherInterface.',
-                docUrl: self::DOC_URL,
-                estimatedMinutes: $fileCount * self::MINUTES_PER_FILE,
-            ));
-        }
-    }
-
-    /**
-     * Detecte le repertoire src/Message/ qui doit etre renomme en src/Command/.
-     * Retourne le nombre de fichiers PHP dans ce repertoire.
-     */
-    private function analyzeMessageDirectory(MigrationReport $report, string $projectPath): int
-    {
-        $messageDir = $projectPath . '/src/Message';
-        if (!is_dir($messageDir)) {
-            return 0;
-        }
-
-        $finder = new Finder();
-        $finder->files()->in($messageDir)->name('*.php');
-
-        $count = 0;
-        foreach ($finder as $file) {
-            $filePath = $file->getRealPath();
-            if ($filePath === false) {
-                continue;
-            }
-
-            $count++;
-            $report->addIssue(new MigrationIssue(
-                severity: Severity::WARNING,
-                category: Category::DEPRECATION,
-                analyzer: $this->getName(),
-                message: sprintf('Fichier dans src/Message/ a deplacer : %s', $file->getRelativePathname()),
-                detail: sprintf(
-                    'Le fichier %s se trouve dans le repertoire src/Message/ qui doit etre renomme en src/Command/ dans Sylius 2.0.',
-                    $file->getRelativePathname(),
-                ),
-                suggestion: 'Deplacer ce fichier dans src/Command/ et mettre a jour le namespace.',
-                file: $filePath,
-                docUrl: self::DOC_URL,
-            ));
-        }
-
-        return $count;
-    }
-
-    /**
-     * Detecte les classes *MessageHandler a renommer en *CommandHandler.
-     * Retourne le nombre de classes detectees.
-     */
-    private function analyzeMessageHandlerClasses(MigrationReport $report, string $projectPath): int
-    {
-        $srcDir = $projectPath . '/src';
+        $srcDir = $report->getProjectPath() . '/src';
         if (!is_dir($srcDir)) {
-            return 0;
-        }
-
-        $finder = new Finder();
-        $finder->files()->in($srcDir)->name('*MessageHandler.php');
-
-        $count = 0;
-        foreach ($finder as $file) {
-            $filePath = $file->getRealPath();
-            if ($filePath === false) {
-                continue;
-            }
-
-            $count++;
-            $baseName = $file->getFilenameWithoutExtension();
-            $newName = str_replace('MessageHandler', 'CommandHandler', $baseName);
-
-            $report->addIssue(new MigrationIssue(
-                severity: Severity::WARNING,
-                category: Category::DEPRECATION,
-                analyzer: $this->getName(),
-                message: sprintf('Classe %s a renommer en %s', $baseName, $newName),
-                detail: sprintf(
-                    'La classe %s dans %s utilise l\'ancienne convention *MessageHandler. '
-                    . 'Dans Sylius 2.0, les handlers sont nommes *CommandHandler.',
-                    $baseName,
-                    $file->getRelativePathname(),
-                ),
-                suggestion: sprintf('Renommer %s en %s et mettre a jour les references.', $baseName, $newName),
-                file: $filePath,
-                docUrl: self::DOC_URL,
-            ));
-        }
-
-        return $count;
-    }
-
-    /**
-     * Detecte les injections de MessageDispatcherInterface dans les fichiers PHP.
-     * Retourne le nombre d'usages trouves.
-     */
-    private function analyzeMessageDispatcherUsages(MigrationReport $report, string $projectPath): int
-    {
-        $srcDir = $projectPath . '/src';
-        if (!is_dir($srcDir)) {
-            return 0;
+            return;
         }
 
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
         $finder = new Finder();
         $finder->files()->in($srcDir)->name('*.php');
-
-        $totalUsages = 0;
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -199,6 +71,9 @@ final class CommandHandlerRenameAnalyzer implements AnalyzerInterface
             }
 
             $code = (string) file_get_contents($filePath);
+            if (!str_contains($code, 'Bundle\\Message')) {
+                continue;
+            }
 
             try {
                 $ast = $parser->parse($code);
@@ -210,20 +85,27 @@ final class CommandHandlerRenameAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            /* Visiteur pour detecter les usages de MessageDispatcherInterface */
-            $visitor = new class () extends NodeVisitorAbstract {
-                /** @var list<array{name: string, line: int}> */
-                public array $usages = [];
+            $visitor = new class (self::RENAMED_NAMESPACES) extends NodeVisitorAbstract {
+                /** @var array<string, int> Classe referencee => premiere ligne */
+                public array $references = [];
+
+                /**
+                 * @param array<string, string> $namespaces
+                 */
+                public function __construct(private readonly array $namespaces)
+                {
+                }
 
                 public function enterNode(Node $node): null
                 {
-                    if ($node instanceof Node\Name) {
-                        $name = $node->toString();
-                        if (str_contains($name, 'MessageDispatcherInterface')) {
-                            $this->usages[] = [
-                                'name' => $name,
-                                'line' => $node->getStartLine(),
-                            ];
+                    if (!$node instanceof Node\Name) {
+                        return null;
+                    }
+
+                    $name = ltrim($node->toString(), '\\');
+                    foreach (array_keys($this->namespaces) as $namespace) {
+                        if (str_starts_with($name, $namespace) && !isset($this->references[$name])) {
+                            $this->references[$name] = $node->getStartLine();
                         }
                     }
 
@@ -232,29 +114,45 @@ final class CommandHandlerRenameAnalyzer implements AnalyzerInterface
             };
 
             $traverser = new NodeTraverser();
+            $traverser->addVisitor(new NameResolver());
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 
-            foreach ($visitor->usages as $usage) {
-                $totalUsages++;
+            foreach ($visitor->references as $class => $line) {
+                $newClass = self::renamed($class);
                 $report->addIssue(new MigrationIssue(
-                    severity: Severity::WARNING,
+                    severity: Severity::BREAKING,
                     category: Category::DEPRECATION,
                     analyzer: $this->getName(),
-                    message: sprintf('Injection de MessageDispatcherInterface detectee ligne %d', $usage['line']),
+                    message: sprintf('Classe %s deplacee vers %s', $class, $newClass),
                     detail: sprintf(
-                        'Le fichier %s utilise MessageDispatcherInterface qui doit etre remplacee '
-                        . 'par CommandDispatcherInterface dans Sylius 2.0.',
+                        'Sylius 2.0 renomme les dossiers Message, MessageHandler et MessageDispatcher en Command, '
+                        . 'CommandHandler et CommandDispatcher : %s n\'existe plus (%s ligne %d).',
+                        $class,
                         $file->getRelativePathname(),
+                        $line,
                     ),
-                    suggestion: 'Remplacer MessageDispatcherInterface par CommandDispatcherInterface.',
+                    suggestion: sprintf('Remplacer %s par %s.', $class, $newClass),
                     file: $filePath,
-                    line: $usage['line'],
+                    line: $line,
                     docUrl: self::DOC_URL,
+                    estimatedMinutes: self::MINUTES_PER_FILE,
                 ));
             }
         }
+    }
 
-        return $totalUsages;
+    /**
+     * Nom de la classe apres renommage de son espace de noms.
+     */
+    public static function renamed(string $class): string
+    {
+        foreach (self::RENAMED_NAMESPACES as $old => $new) {
+            if (str_starts_with($class, $old)) {
+                return $new . substr($class, \strlen($old));
+            }
+        }
+
+        return $class;
     }
 }

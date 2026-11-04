@@ -14,14 +14,6 @@ final class ServiceDecoratorFixer implements AutoFixInterface
 {
     private const TARGET_ANALYZER = 'Service Decorator';
 
-    /** Mapping des anciens services decores vers les nouveaux */
-    private const DECORATOR_MAPPING = [
-        'sylius.controller.admin.' => 'sylius_admin.controller.',
-        'sylius.controller.shop.' => 'sylius_shop.controller.',
-        'sylius.repository.' => 'sylius.repository.',
-        'sylius.factory.' => 'sylius.factory.',
-    ];
-
     public function getName(): string
     {
         return 'Service Decorator Fixer';
@@ -56,20 +48,14 @@ final class ServiceDecoratorFixer implements AutoFixInterface
         $originalContent = (string) file_get_contents($absolutePath);
         $fixedContent = $originalContent;
 
-        /* Remplacement des prefixes de services dans les blocs decorates */
-        foreach (self::DECORATOR_MAPPING as $old => $new) {
-            if ($old !== $new) {
-                $fixedContent = str_replace(
-                    "decorates: '" . $old,
-                    "decorates: '" . $new,
-                    $fixedContent,
-                );
-                $fixedContent = str_replace(
-                    'decorates: ' . $old,
-                    'decorates: ' . $new,
-                    $fixedContent,
-                );
-            }
+        /* Seuls les identifiants renommes mot pour mot dans UPGRADE-2.0.md sont remplaces, et
+           uniquement comme cible de decorates : un prefixe generique visait des services inexistants. */
+        foreach (RenamedServiceIdFixer::SERVICE_ID_MAPPING as $old => $new) {
+            $fixedContent = (string) preg_replace(
+                '/^(\s*decorates:\s*[\'"]?)' . preg_quote($old, '/') . '(?=[\'"]?\s*$)/m',
+                '${1}' . $new,
+                $fixedContent,
+            );
         }
 
         if ($fixedContent === $originalContent) {

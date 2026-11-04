@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace PierreArthur\SyliusUpgradeAnalyzer\AutoFix;
 
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\ShippingCalculatorAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 
 /**
- * Met a jour les implementations de ShippingCalculator pour Sylius 2.0.
- * Remplace les anciennes references d'interface.
+ * Renomme les references aux services de calcul des frais de port du coeur.
+ *
+ * Seules les references ("@id", decorates, alias) sont modifiees : le tag
+ * sylius.shipping_calculator garde son nom en Sylius 2.0 et ne doit pas etre touche.
  */
 final class ShippingCalculatorFixer implements AutoFixInterface
 {
@@ -26,11 +29,8 @@ final class ShippingCalculatorFixer implements AutoFixInterface
         }
 
         $file = $issue->getFile();
-        if ($file === null) {
-            return false;
-        }
 
-        return (bool) preg_match('/\.(php|yaml|yml)$/i', $file);
+        return $file !== null && (bool) preg_match('/\.(yaml|yml)$/i', $file);
     }
 
     public function fix(MigrationIssue $issue, string $projectPath): ?MigrationFix
@@ -48,20 +48,25 @@ final class ShippingCalculatorFixer implements AutoFixInterface
         $originalContent = (string) file_get_contents($absolutePath);
         $fixedContent = $originalContent;
 
-        /* Remplacement des anciennes references */
-        $fixedContent = str_replace('DelegatingCalculatorInterface', 'CalculatorInterface', $fixedContent);
+        foreach (ShippingCalculatorAnalyzer::RENAMED_SERVICES as $oldId => $newId) {
+            $fixedContent = (string) preg_replace_callback(
+                sprintf(ShippingCalculatorAnalyzer::REFERENCE_PATTERN, preg_quote($oldId, '/')),
+                static fn (array $match): string => str_replace($oldId, $newId, $match[0]),
+                $fixedContent,
+            );
+        }
 
         if ($fixedContent === $originalContent) {
             return null;
         }
 
         return new MigrationFix(
-            confidence: FixConfidence::MEDIUM,
+            confidence: FixConfidence::HIGH,
             filePath: $absolutePath,
             originalContent: $originalContent,
             fixedContent: $fixedContent,
             description: sprintf(
-                'Mise a jour des references ShippingCalculator dans %s.',
+                'Renommage des services de calcul des frais de port dans %s.',
                 basename($absolutePath),
             ),
         );

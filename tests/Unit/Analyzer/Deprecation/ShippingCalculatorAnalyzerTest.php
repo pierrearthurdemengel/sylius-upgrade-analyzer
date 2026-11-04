@@ -11,8 +11,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
 /**
- * Tests unitaires pour l'analyseur des calculateurs d'expedition.
- * Verifie la detection des implementations de CalculatorInterface de Sylius Shipping.
+ * Tests de la detection des references aux services de calcul des frais de port renommes.
  */
 final class ShippingCalculatorAnalyzerTest extends TestCase
 {
@@ -20,161 +19,69 @@ final class ShippingCalculatorAnalyzerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/test_' . uniqid('shipcalc_', true);
-        mkdir($this->tempDir, 0755, true);
+        $this->tempDir = sys_get_temp_dir() . '/shipping-calculator-' . uniqid('', true);
+        mkdir($this->tempDir . '/config', 0755, true);
     }
 
     protected function tearDown(): void
     {
-        $this->removeDirectory($this->tempDir);
-    }
-
-    private function removeDirectory(string $path): void
-    {
-        if (!is_dir($path)) {
-            return;
+        foreach (glob($this->tempDir . '/config/*') ?: [] as $file) {
+            unlink($file);
         }
-
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir((string) $item->getRealPath());
-            } else {
-                unlink((string) $item->getRealPath());
-            }
-        }
-
-        rmdir($path);
+        rmdir($this->tempDir . '/config');
+        rmdir($this->tempDir);
     }
 
-    private function createReport(): MigrationReport
+    private function analyze(string $yaml): MigrationReport
     {
-        return new MigrationReport(
-            startedAt: new \DateTimeImmutable(),
-            detectedSyliusVersion: '1.12',
-            targetVersion: '2.0',
-            projectPath: $this->tempDir,
-        );
+        file_put_contents($this->tempDir . '/config/services.yaml', $yaml);
+        $report = new MigrationReport(new \DateTimeImmutable(), '1.14.0', '2.2', $this->tempDir);
+        (new ShippingCalculatorAnalyzer())->analyze($report);
+
+        return $report;
     }
 
-    /**
-     * Verifie que supports retourne false pour un projet sans src/.
-     */
     #[Test]
-    public function testSupportsReturnsFalseWithoutSrcDir(): void
+    public function testFlagsInjectedRenamedService(): void
     {
-        $analyzer = new ShippingCalculatorAnalyzer();
-        $report = $this->createReport();
+        $issues = $this->analyze("services:\n    App\\Shipping\\WeightCalculator:\n        arguments: ['@sylius.shipping_calculator.flat_rate']\n")->getIssues();
 
-        self::assertFalse($analyzer->supports($report));
+        self::assertCount(1, $issues);
+        self::assertSame(Severity::BREAKING, $issues[0]->getSeverity());
+        self::assertSame('Service renomme "sylius.shipping_calculator.flat_rate" reference dans services.yaml', $issues[0]->getMessage());
+        self::assertSame('Remplacer sylius.shipping_calculator.flat_rate par sylius.calculator.shipping.flat_rate.', $issues[0]->getSuggestion());
+        self::assertSame(3, $issues[0]->getLine());
     }
 
-    /**
-     * Verifie que supports retourne true quand CalculatorInterface de Sylius Shipping est reference.
-     */
     #[Test]
-    public function testSupportsReturnsTrueWithShippingCalculator(): void
+    public function testFlagsDecoratedRenamedService(): void
     {
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/WeightCalculator.php', <<<'PHP'
-<?php
+        $issues = $this->analyze("services:\n    App\\Shipping\\LoggingCalculator:\n        decorates: sylius.shipping_calculator\n")->getIssues();
 
-namespace App\Shipping;
-
-use Sylius\Component\Shipping\Calculator\CalculatorInterface;
-
-class WeightCalculator implements CalculatorInterface
-{
-    public function calculate($subject, array $configuration): int { return 0; }
-    public function getType(): string { return 'weight'; }
-}
-PHP);
-
-        $analyzer = new ShippingCalculatorAnalyzer();
-        $report = $this->createReport();
-
-        self::assertTrue($analyzer->supports($report));
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('"sylius.shipping_calculator"', $issues[0]->getMessage());
     }
 
-    /**
-     * Verifie la detection d'un calculateur personnalise.
-     */
     #[Test]
-    public function testDetectsShippingCalculatorImplementation(): void
+    public function testIgnoresUnchangedTagOfCustomCalculator(): void
     {
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/WeightCalculator.php', <<<'PHP'
-<?php
+        /* Le tag sylius.shipping_calculator garde son nom en Sylius 2.0 */
+        $report = $this->analyze("services:\n    App\\Shipping\\WeightCalculator:\n        tags:\n            - { name: sylius.shipping_calculator, calculator: weight, label: Poids }\n");
 
-namespace App\Shipping;
-
-use Sylius\Component\Shipping\Calculator\CalculatorInterface;
-
-class WeightCalculator implements CalculatorInterface
-{
-    public function calculate($subject, array $configuration): int { return 0; }
-    public function getType(): string { return 'weight'; }
-}
-PHP);
-
-        $analyzer = new ShippingCalculatorAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        $calcIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'WeightCalculator'),
-        );
-        self::assertNotEmpty($calcIssues);
+        self::assertSame([], $report->getIssues());
     }
 
-    /**
-     * Verifie que les problemes sont de severite WARNING.
-     */
     #[Test]
-    public function testCreatesWarningIssues(): void
+    public function testSupportsProjectsWithConfiguration(): void
     {
-        $srcDir = $this->tempDir . '/src';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/WeightCalculator.php', <<<'PHP'
-<?php
+        $report = new MigrationReport(new \DateTimeImmutable(), '1.14.0', '2.2', $this->tempDir);
 
-namespace App\Shipping;
-
-use Sylius\Component\Shipping\Calculator\CalculatorInterface;
-
-class WeightCalculator implements CalculatorInterface
-{
-    public function calculate($subject, array $configuration): int { return 0; }
-    public function getType(): string { return 'weight'; }
-}
-PHP);
-
-        $analyzer = new ShippingCalculatorAnalyzer();
-        $report = $this->createReport();
-
-        $analyzer->analyze($report);
-
-        foreach ($report->getIssues() as $issue) {
-            self::assertSame(Severity::WARNING, $issue->getSeverity());
-        }
+        self::assertTrue((new ShippingCalculatorAnalyzer())->supports($report));
     }
 
-    /**
-     * Verifie que getName retourne le nom attendu.
-     */
     #[Test]
     public function testGetNameReturnsExpected(): void
     {
-        $analyzer = new ShippingCalculatorAnalyzer();
-
-        self::assertSame('Shipping Calculator', $analyzer->getName());
+        self::assertSame('Shipping Calculator', (new ShippingCalculatorAnalyzer())->getName());
     }
 }

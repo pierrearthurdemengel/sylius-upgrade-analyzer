@@ -12,9 +12,12 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Component\Finder\Finder;
 
 /**
- * Analyseur des contextes Behat deprecies.
- * Sylius 2.0 supprime ou renomme certains contextes Behat internes.
- * Cet analyseur detecte les references aux contextes deprecies dans la configuration Behat.
+ * Analyseur des services Behat de Sylius supprimes en 2.0.
+ *
+ * Le seul service Behat retire est sylius.behat.api_security, scinde en
+ * sylius.behat.api_admin_security et sylius.behat.api_shop_security (UPGRADE-2.0.md,
+ * Testing Suite). Les contextes calendar, doctrine_orm, managing_orders et checkout
+ * existent toujours en Sylius 2.0 : ils ne sont pas signales.
  */
 final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
 {
@@ -24,18 +27,9 @@ final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
     /** URL de la documentation de migration */
     private const DOC_URL = 'https://docs.sylius.com/migration-2.0';
 
-    /** Contextes Behat deprecies dans Sylius 2.0 */
+    /** Services Behat supprimes en Sylius 2.0 */
     private const DEPRECATED_CONTEXTS = [
-        'sylius.behat.context.hook.calendar',
-        'sylius.behat.context.hook.doctrine_orm',
-        'sylius.behat.context.setup.calendar',
-        'sylius.behat.context.transform.calendar',
-        'sylius.behat.context.ui.admin.managing_orders',
-        'sylius.behat.context.ui.shop.checkout',
-        'Sylius\\Behat\\Context\\Hook\\CalendarContext',
-        'Sylius\\Behat\\Context\\Hook\\DoctrineORMContext',
-        'Sylius\\Behat\\Context\\Setup\\CalendarContext',
-        'Sylius\\Behat\\Context\\Transform\\CalendarContext',
+        'sylius.behat.api_security',
     ];
 
     public function getName(): string
@@ -87,13 +81,13 @@ final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
                 category: Category::DEPRECATION,
                 analyzer: $this->getName(),
                 message: sprintf(
-                    '%d reference(s) a des contextes Behat deprecies detectee(s)',
+                    '%d reference(s) a des services Behat supprimes detectee(s)',
                     $contextCount,
                 ),
-                detail: 'Sylius 2.0 supprime ou renomme certains contextes Behat internes. '
-                    . 'Les suites de tests utilisant ces contextes doivent etre mises a jour.',
-                suggestion: 'Remplacer les references aux contextes deprecies par les nouveaux '
-                    . 'contextes Sylius 2.0 ou creer des contextes personnalises.',
+                detail: 'Sylius 2.0 remplace sylius.behat.api_security par sylius.behat.api_admin_security '
+                    . 'et sylius.behat.api_shop_security : les contextes qui l\'injectent ne demarrent plus.',
+                suggestion: 'Injecter sylius.behat.api_admin_security dans les contextes d\'administration '
+                    . 'et sylius.behat.api_shop_security dans les contextes boutique.',
                 docUrl: self::DOC_URL,
                 estimatedMinutes: $contextCount * self::MINUTES_PER_CONTEXT,
             ));
@@ -120,14 +114,14 @@ final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
                     severity: Severity::WARNING,
                     category: Category::DEPRECATION,
                     analyzer: $this->getName(),
-                    message: sprintf('Contexte Behat deprecie "%s" detecte', $context),
+                    message: sprintf('Service Behat supprime "%s" detecte', $context),
                     detail: sprintf(
-                        'Le contexte Behat "%s" reference dans %s est deprecie dans Sylius 2.0.',
+                        'Le service Behat "%s" reference dans %s n\'existe plus dans Sylius 2.0.',
                         $context,
                         str_replace($projectPath . '/', '', $filePath),
                     ),
                     suggestion: sprintf(
-                        'Remplacer le contexte "%s" par son equivalent dans Sylius 2.0.',
+                        'Remplacer "%s" par sylius.behat.api_admin_security ou sylius.behat.api_shop_security.',
                         $context,
                     ),
                     file: $filePath,
@@ -152,13 +146,17 @@ final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
         if (is_dir($projectPath . '/tests')) {
             $dirs[] = $projectPath . '/tests';
         }
+        /* Les contextes du projet sont souvent declares dans config/services_test.yaml */
+        if (is_dir($projectPath . '/config')) {
+            $dirs[] = $projectPath . '/config';
+        }
 
         if ($dirs === []) {
             return 0;
         }
 
         $finder = new Finder();
-        $finder->files()->in($dirs)->name('*.yml')->name('*.yaml');
+        $finder->files()->in($dirs)->name(['*.yml', '*.yaml', '*.xml']);
 
         $count = 0;
 
@@ -177,15 +175,14 @@ final class BehatContextDeprecationAnalyzer implements AnalyzerInterface
                         severity: Severity::WARNING,
                         category: Category::DEPRECATION,
                         analyzer: $this->getName(),
-                        message: sprintf('Contexte Behat deprecie "%s" dans %s', $context, $file->getRelativePathname()),
+                        message: sprintf('Service Behat supprime "%s" dans %s', $context, $file->getRelativePathname()),
                         detail: sprintf(
-                            'Le contexte Behat "%s" reference dans %s est deprecie dans Sylius 2.0.',
+                            'Le service Behat "%s" reference dans %s n\'existe plus dans Sylius 2.0.',
                             $context,
                             $file->getRelativePathname(),
                         ),
                         suggestion: sprintf(
-                            'Remplacer le contexte "%s" par son equivalent dans Sylius 2.0 '
-                            . 'ou creer un contexte personnalise.',
+                            'Remplacer "%s" par sylius.behat.api_admin_security ou sylius.behat.api_shop_security.',
                             $context,
                         ),
                         file: $filePath,

@@ -37,6 +37,10 @@ final class RenamedServiceIdAnalyzer implements AnalyzerInterface
         'sylius.zone_matcher' => 'sylius.matcher.zone',
         'sylius.address_comparator' => 'sylius.comparator.address',
         'sylius.controller.admin.dashboard' => 'sylius_admin.controller.dashboard',
+        'sylius.controller.shop.contact' => 'sylius_shop.controller.contact',
+        'sylius.controller.shop.currency_switch' => 'sylius_shop.controller.currency_switch',
+        'sylius.controller.shop.locale_switch' => 'sylius_shop.controller.locale_switch',
+        'sylius.controller.shop.register_thank_you' => 'sylius_shop.controller.register_thank_you',
         'sylius.security.password_hasher' => 'removed',
         'sylius.security.user_login' => 'removed',
         'sylius.controller.admin.notification' => 'removed',
@@ -54,17 +58,6 @@ final class RenamedServiceIdAnalyzer implements AnalyzerInterface
         'sylius.form_registry.payum_gateway_config' => 'sylius.form_registry.payment_gateway_config',
         'sylius.admin.menu_builder.customer.show' => 'removed',
         'sylius.admin.menu_builder.order.show' => 'removed',
-    ];
-
-    /**
-     * Correspondance entre anciens prefixes de services et nouveaux prefixes.
-     * Utilise pour detecter les patterns de renommage par prefixe dans les fichiers YAML.
-     *
-     * @var array<string, string>
-     */
-    private const SERVICE_PREFIX_RENAMES = [
-        'sylius.controller.admin.' => 'sylius_admin.controller.',
-        'sylius.listener.admin.' => 'sylius_admin.listener.',
     ];
 
     /**
@@ -97,12 +90,6 @@ final class RenamedServiceIdAnalyzer implements AnalyzerInterface
 
             foreach (array_keys(self::SERVICE_RENAMES) as $oldServiceId) {
                 if (str_contains($content, $oldServiceId)) {
-                    return true;
-                }
-            }
-
-            foreach (array_keys(self::SERVICE_PREFIX_RENAMES) as $oldPrefix) {
-                if (str_contains($content, $oldPrefix)) {
                     return true;
                 }
             }
@@ -251,36 +238,6 @@ final class RenamedServiceIdAnalyzer implements AnalyzerInterface
 
             $content = (string) file_get_contents($filePath);
             $relativePath = $file->getRelativePathname();
-
-            /* Verification des prefixes de services deprecies */
-            foreach (self::SERVICE_PREFIX_RENAMES as $oldPrefix => $newPrefix) {
-                if (str_contains($content, $oldPrefix)) {
-                    $count++;
-                    $report->addIssue(new MigrationIssue(
-                        severity: Severity::BREAKING,
-                        category: Category::DEPRECATION,
-                        analyzer: $this->getName(),
-                        message: sprintf(
-                            'Prefixe de service deprecie "%s" detecte dans %s',
-                            $oldPrefix,
-                            $relativePath,
-                        ),
-                        detail: sprintf(
-                            'Le prefixe de service "%s" est renomme en "%s" dans Sylius 2.0. '
-                            . 'Toutes les references utilisant ce prefixe doivent etre mises a jour.',
-                            $oldPrefix,
-                            $newPrefix,
-                        ),
-                        suggestion: sprintf(
-                            'Remplacer le prefixe "%s" par "%s" dans les identifiants de services.',
-                            $oldPrefix,
-                            $newPrefix,
-                        ),
-                        file: $filePath,
-                        docUrl: self::DOC_URL,
-                    ));
-                }
-            }
 
             /* Verification des espaces de noms utilises comme identifiants de services */
             foreach (self::SERVICE_NAMESPACE_RENAMES as $oldNamespace => $newPattern) {
