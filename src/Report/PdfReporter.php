@@ -35,8 +35,9 @@ final class PdfReporter implements ReporterInterface
     /**
      * Génère le PDF et l'écrit dans le fichier de sortie.
      *
-     * Contexte reconnu : 'output_file' (chemin du PDF) et 'tjm' (taux journalier
-     * en euros, ajoute une estimation budgétaire au rapport).
+     * Contexte reconnu : 'output_file' (chemin du PDF), 'tjm' (taux journalier
+     * en euros, ajoute une estimation budgétaire au rapport) et 'promo' (false retire
+     * l'encart d'accompagnement).
      *
      * @throws PdfGenerationException Si dompdf est absent, si le rendu échoue ou si le fichier ne peut être écrit
      */
@@ -45,7 +46,11 @@ final class PdfReporter implements ReporterInterface
         $outputFile = $this->resolveOutputFile($context);
         $dailyRate = isset($context['tjm']) && is_int($context['tjm']) ? $context['tjm'] : null;
 
-        $pdf = $this->renderer->render($this->htmlBuilder->buildProjectReport($report, $dailyRate));
+        $pdf = $this->renderer->render($this->htmlBuilder->buildProjectReport(
+            $report,
+            $dailyRate,
+            MigrationServiceOffer::isEnabled($context),
+        ));
         $this->write($outputFile, $pdf);
 
         $output->writeln(sprintf('<info>Rapport PDF généré dans %s</info>', $outputFile));

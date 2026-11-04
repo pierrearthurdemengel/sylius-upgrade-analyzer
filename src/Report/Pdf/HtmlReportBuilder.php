@@ -15,6 +15,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Complexity;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\MigrationServiceOffer;
 
 /**
  * Construit le HTML des rapports PDF à partir des templates PHP de templates/pdf/.
@@ -39,9 +40,10 @@ final class HtmlReportBuilder
     /**
      * Construit le rapport d'un projet : synthèse, risques, feuille de route et détail des problèmes.
      *
-     * @param int|null $dailyRate TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param int|null $dailyRate        TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param bool     $withServiceOffer Ajoute l'encart d'accompagnement en fin de document
      */
-    public function buildProjectReport(MigrationReport $report, ?int $dailyRate = null): string
+    public function buildProjectReport(MigrationReport $report, ?int $dailyRate = null, bool $withServiceOffer = true): string
     {
         return $this->render('project-report.php', [
             'report' => $report,
@@ -49,6 +51,7 @@ final class HtmlReportBuilder
             'cost' => $this->estimateCost($report, $dailyRate),
             'roadmap' => $this->roadmapGenerator->generate($report),
             'generatedAt' => new \DateTimeImmutable(),
+            'offer' => $withServiceOffer ? new MigrationServiceOffer() : null,
         ]);
     }
 
@@ -57,9 +60,10 @@ final class HtmlReportBuilder
      * totaux, puis une synthèse par projet.
      *
      * @param list<MigrationReport> $reports
-     * @param int|null              $dailyRate TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param int|null              $dailyRate        TJM en euros ; ajoute une estimation budgétaire si fourni
+     * @param bool                  $withServiceOffer Ajoute l'encart d'accompagnement en fin de document
      */
-    public function buildMultiProjectReport(array $reports, ?int $dailyRate = null): string
+    public function buildMultiProjectReport(array $reports, ?int $dailyRate = null, bool $withServiceOffer = true): string
     {
         $projects = [];
         $totalHours = 0.0;
@@ -87,6 +91,7 @@ final class HtmlReportBuilder
             'totalHours' => $totalHours,
             'totalCost' => $totalCost,
             'generatedAt' => new \DateTimeImmutable(),
+            'offer' => $withServiceOffer ? new MigrationServiceOffer() : null,
         ]);
     }
 

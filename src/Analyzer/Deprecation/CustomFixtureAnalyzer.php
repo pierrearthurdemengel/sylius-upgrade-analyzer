@@ -65,6 +65,33 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
             return true;
         }
 
+        /* Une fixture Sylius peut vivre ailleurs que dans src/DataFixtures/ (src/Fixture/...)
+           sans configuration dediee : sa seule presence justifie l'analyse. */
+        return $this->srcReferencesSyliusFixtures($projectPath . '/src');
+    }
+
+    /**
+     * Indique si un fichier PHP de src/ fait reference a un espace de noms de fixtures Sylius.
+     * Simple recherche textuelle : l'analyse proprement dite verifie ensuite l'heritage reel.
+     */
+    private function srcReferencesSyliusFixtures(string $srcDir): bool
+    {
+        if (!is_dir($srcDir)) {
+            return false;
+        }
+
+        $finder = new Finder();
+        $finder->files()->in($srcDir)->name('*.php');
+
+        foreach ($finder as $file) {
+            $content = (string) file_get_contents((string) $file->getRealPath());
+            foreach (self::SYLIUS_FIXTURE_NAMESPACES as $namespace) {
+                if (str_contains($content, $namespace)) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 

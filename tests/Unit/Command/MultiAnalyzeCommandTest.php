@@ -186,4 +186,19 @@ final class MultiAnalyzeCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringStartsWith('%PDF-', (string) file_get_contents($outputFile));
     }
+
+    /** Verifie que --no-promo retire la mention d'accompagnement du rapport consolide. */
+    #[Test]
+    public function testNoPromoOptionHidesServiceOffer(): void
+    {
+        $tester = $this->createTester();
+
+        $tester->execute([
+            'project-paths' => [$this->fixturePath('project-moderate')],
+            '--no-promo' => true,
+        ]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertStringNotContainsString('creation-site-pro.fr', $tester->getDisplay());
+    }
 }

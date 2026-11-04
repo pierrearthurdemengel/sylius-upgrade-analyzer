@@ -41,6 +41,10 @@ final class ConsoleReporter implements ReporterInterface
         $this->displayWarningIssues($io, $report, $output);
         $this->displaySuggestions($io, $report, $output);
         $this->displayFooter($io);
+
+        if (MigrationServiceOffer::isEnabled($context)) {
+            $this->displayServiceOffer($io, $report);
+        }
     }
 
     public function getFormat(): string
@@ -227,6 +231,20 @@ final class ConsoleReporter implements ReporterInterface
             $io->text(sprintf('     Documentation : %s', $issue->getDocUrl()));
         }
 
+        $io->newLine();
+    }
+
+    /**
+     * Affiche la ligne d'offre d'accompagnement, en dernier pour ne jamais masquer le rapport.
+     */
+    private function displayServiceOffer(SymfonyStyle $io, MigrationReport $report): void
+    {
+        $line = (new MigrationServiceOffer())->consoleLine($report->getTotalEstimatedHours());
+        if ($line === null) {
+            return;
+        }
+
+        $io->text(sprintf('<comment>%s</comment>', $line));
         $io->newLine();
     }
 

@@ -78,6 +78,39 @@ final class ResourceBundleAnalyzer implements AnalyzerInterface
             return true;
         }
 
+        /* Un projet dont la seule personnalisation est une surcharge de service Sylius
+           (YAML ou XML) doit aussi etre analyse. */
+        return $this->hasSyliusServiceOverrides($projectPath);
+    }
+
+    /**
+     * Indique si la configuration du projet surcharge ou decore au moins un service Sylius.
+     */
+    private function hasSyliusServiceOverrides(string $projectPath): bool
+    {
+        $configDir = $projectPath . '/config';
+        if (!is_dir($configDir)) {
+            return false;
+        }
+
+        $finder = new Finder();
+        $finder->files()->in($configDir)->name('*.yaml')->name('*.yml')->name('*.xml');
+
+        foreach ($finder as $file) {
+            $filePath = $file->getRealPath();
+            if ($filePath === false) {
+                continue;
+            }
+
+            $overriddenServiceIds = strtolower($file->getExtension()) === 'xml'
+                ? $this->findXmlServiceOverrides($filePath)
+                : $this->findYamlServiceOverrides($filePath);
+
+            if ($overriddenServiceIds !== []) {
+                return true;
+            }
+        }
+
         return false;
     }
 

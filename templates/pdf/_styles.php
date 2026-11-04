@@ -62,4 +62,8 @@
     .callout { background: #f6f7f9; border-left: 3px solid #9ca3af; padding: 8px 10px; margin-bottom: 10px; }
     ul.plain { margin: 0; padding-left: 14px; }
     ul.plain li { margin-bottom: 3px; }
+
+    /* Encart d'accompagnement en fin de document */
+    .service-offer { page-break-inside: avoid; border-top: 2px solid #1a7f5a; padding-top: 10px; margin-top: 28px; }
+    .service-offer h2 { border-bottom: none; padding-bottom: 0; }
 </style>

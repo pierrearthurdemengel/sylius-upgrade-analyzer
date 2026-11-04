@@ -269,4 +269,18 @@ final class AnalyzeCommandTest extends TestCase
             @unlink($outputFile);
         }
     }
+
+    /** Verifie que --no-promo retire la mention d'accompagnement de la sortie console. */
+    #[Test]
+    public function testNoPromoOptionHidesServiceOffer(): void
+    {
+        $tester = new CommandTester($this->createCommand(analyzers: [new TwigTemplateOverrideAnalyzer()]));
+
+        $tester->execute([
+            'project-path' => $this->getFixturePath('project-moderate'),
+            '--no-promo' => true,
+        ]);
+
+        self::assertStringNotContainsString('creation-site-pro.fr', $tester->getDisplay());
+    }
 }

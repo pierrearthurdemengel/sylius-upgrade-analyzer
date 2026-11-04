@@ -971,4 +971,39 @@ final class ResourceBundleAnalyzerTest extends TestCase
 
         self::assertSame([], $report->getIssues());
     }
+
+    /**
+     * Verifie que l'analyse se declenche pour un projet dont la seule personnalisation
+     * Sylius est une surcharge de service, sans configuration sylius_resource ni classe PHP.
+     */
+    #[Test]
+    public function testSupportsProjectWithOnlySyliusServiceOverride(): void
+    {
+        $this->writeProjectFile('config/services.xml', <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <container xmlns="http://symfony.com/schema/dic/services">
+                <services>
+                    <service id="sylius.repository.order" class="App\Repository\OrderRepository"/>
+                </services>
+            </container>
+            XML);
+
+        self::assertTrue((new ResourceBundleAnalyzer())->supports($this->createTempReport()));
+    }
+
+    /**
+     * Verifie qu'une configuration qui ne fait que referencer un service Sylius
+     * ne declenche pas l'analyse.
+     */
+    #[Test]
+    public function testDoesNotSupportProjectOnlyReferencingSyliusServices(): void
+    {
+        $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                app.order_exporter:
+                    arguments: ['@sylius.repository.order']
+            YAML);
+
+        self::assertFalse((new ResourceBundleAnalyzer())->supports($this->createTempReport()));
+    }
 }
