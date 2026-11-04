@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\SyliusVersionDetector;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
@@ -180,8 +181,8 @@ final class AnalyzeCommand extends Command
             return Command::FAILURE;
         }
 
-        /* Détection de la version de Sylius depuis composer.lock */
-        $syliusVersion = $this->detectSyliusVersion($projectPath);
+        /* Détection de la version de Sylius depuis composer.lock, à défaut composer.json */
+        $syliusVersion = (new SyliusVersionDetector())->detect($projectPath);
 
         /* Création du rapport de migration */
         $report = new MigrationReport(
@@ -293,51 +294,6 @@ final class AnalyzeCommand extends Command
         }
 
         return $realPath;
-    }
-
-    /**
-     * Détecte la version de Sylius installée en lisant composer.lock.
-     *
-     * @return ?string Version détectée ou null si non trouvée
-     */
-    private function detectSyliusVersion(string $projectPath): ?string
-    {
-        $composerLockPath = $projectPath . '/composer.lock';
-
-        if (!file_exists($composerLockPath)) {
-            return null;
-        }
-
-        $lockContent = file_get_contents($composerLockPath);
-        if ($lockContent === false) {
-            return null;
-        }
-
-        $lockData = json_decode($lockContent, true);
-        if (!is_array($lockData)) {
-            return null;
-        }
-
-        /* Recherche du paquet sylius/sylius dans les dépendances */
-        $packages = array_merge(
-            $lockData['packages'] ?? [],
-            $lockData['packages-dev'] ?? [],
-        );
-
-        foreach ($packages as $package) {
-            if (!is_array($package)) {
-                continue;
-            }
-
-            $packageName = $package['name'] ?? '';
-
-            /* Recherche de sylius/sylius ou sylius/core-bundle comme indicateurs de version */
-            if ($packageName === 'sylius/sylius' || $packageName === 'sylius/core-bundle') {
-                return $package['version'] ?? null;
-            }
-        }
-
-        return null;
     }
 
     /**

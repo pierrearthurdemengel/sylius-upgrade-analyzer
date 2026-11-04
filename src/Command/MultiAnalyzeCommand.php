@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\SyliusVersionDetector;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\MultiProjectReporter;
@@ -196,7 +197,7 @@ final class MultiAnalyzeCommand extends Command
      */
     private function analyzeProject(string $projectPath, string $targetVersion, SymfonyStyle $io): MigrationReport
     {
-        $syliusVersion = $this->detectSyliusVersion($projectPath);
+        $syliusVersion = (new SyliusVersionDetector())->detect($projectPath);
 
         $report = new MigrationReport(
             startedAt: new \DateTimeImmutable(),
@@ -227,41 +228,6 @@ final class MultiAnalyzeCommand extends Command
         $report->complete();
 
         return $report;
-    }
-
-    /**
-     * Détecte la version de Sylius depuis composer.lock.
-     */
-    private function detectSyliusVersion(string $projectPath): ?string
-    {
-        $lockPath = $projectPath . '/composer.lock';
-        if (!file_exists($lockPath)) {
-            return null;
-        }
-
-        $content = file_get_contents($lockPath);
-        if ($content === false) {
-            return null;
-        }
-
-        $data = json_decode($content, true);
-        if (!is_array($data)) {
-            return null;
-        }
-
-        $packages = array_merge($data['packages'] ?? [], $data['packages-dev'] ?? []);
-
-        foreach ($packages as $package) {
-            if (!is_array($package)) {
-                continue;
-            }
-            $name = $package['name'] ?? '';
-            if ($name === 'sylius/sylius' || $name === 'sylius/core-bundle') {
-                return $package['version'] ?? null;
-            }
-        }
-
-        return null;
     }
 
     /**
