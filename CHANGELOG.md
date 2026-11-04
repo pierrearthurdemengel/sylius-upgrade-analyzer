@@ -7,6 +7,12 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-04
+
+### Fixed
+- `PhpSecurityPatchAnalyzer` : plus d'alerte bloquante sur une déclaration qui ne décrit pas le PHP exécuté (`config.platform.php`, `.php-version`, `.tool-versions`), signalée désormais pour vérification avec `php -v` ; seule une image Docker épinglée sur un correctif reste bloquante
+- `PhpSecurityPatchAnalyzer` : chaque alerte cite les avis officiels de l'équipe PHP (GHSA-w8hw-w9fx-j79w, GHSA-6wmf-4rv5-p3rp) et l'inscription au catalogue KEV de la CISA ; le lien de documentation mène à l'avis au lieu du journal des versions
+
 ## [2.3.0] - 2026-11-04
 
 ### Added
