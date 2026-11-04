@@ -1,0 +1,3 @@
+# Les exemples avant/apres sont compares octet par octet : fins de ligne LF sur tous les postes.
+tests/Fixtures/fixer-examples.php text eol=lf
+docs/fixer-examples.md text eol=lf
