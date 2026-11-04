@@ -2,64 +2,87 @@
 // Lit le rapport JSON et genere un commentaire formate en Markdown
 
 const fs = require('fs');
-const { execSync } = require('child_process');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('child_process');
 
-async function main() {
-    const reportFile = process.env.REPORT_FILE || 'sylius-upgrade-report.json';
+// GitHub refuse les commentaires de plus de 65 536 caracteres : un gros projet
+// Sylius 1.x peut compter plusieurs centaines d'issues bloquantes.
+const MAX_LISTED_ISSUES = 50;
 
-    if (!fs.existsSync(reportFile)) {
-        console.error(`Rapport introuvable : ${reportFile}`);
-        process.exit(1);
-    }
-
-    const report = JSON.parse(fs.readFileSync(reportFile, 'utf-8'));
+function buildComment(report) {
     const summary = report.summary;
 
-    // Construction du commentaire Markdown
     let comment = `## Sylius Upgrade Analyzer\n\n`;
     comment += `| Metrique | Valeur |\n`;
     comment += `|---|---|\n`;
-    comment += `| Complexite | **${summary.complexity.toUpperCase()}** |\n`;
+    comment += `| Complexite | **${String(summary.complexity).toUpperCase()}** |\n`;
     comment += `| Heures estimees | ${summary.total_hours}h |\n`;
     comment += `| Issues BREAKING | ${summary.breaking_count} |\n`;
     comment += `| Issues WARNING | ${summary.warning_count} |\n`;
     comment += `| Issues SUGGESTION | ${summary.suggestion_count} |\n\n`;
 
     if (summary.breaking_count > 0) {
-        comment += `### Issues BREAKING\n\n`;
+        const breaking = [];
         for (const category of Object.keys(report.issues || {})) {
             for (const issue of report.issues[category]) {
                 if (issue.severity === 'breaking') {
-                    comment += `- **[${category.toUpperCase()}]** ${issue.message}\n`;
+                    breaking.push(`- **[${category.toUpperCase()}]** ${issue.message}`);
                 }
             }
+        }
+
+        comment += `### Issues BREAKING\n\n`;
+        comment += breaking.slice(0, MAX_LISTED_ISSUES).join('\n') + '\n';
+        if (breaking.length > MAX_LISTED_ISSUES) {
+            comment += `\n_… et ${breaking.length - MAX_LISTED_ISSUES} autre(s) : voir le rapport complet._\n`;
         }
         comment += `\n`;
     }
 
     comment += `---\n`;
-    comment += `*Genere par [sylius-upgrade-analyzer](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer)*\n`;
+    comment += `*Rapport de [sylius-upgrade-analyzer](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer)*\n`;
 
-    // Poster le commentaire via gh cli
-    const prNumber = process.env.GITHUB_REF?.match(/refs\/pull\/(\d+)/)?.[1];
+    return comment;
+}
+
+function main() {
+    const reportFile = process.env.REPORT_FILE || 'sylius-upgrade-report.json';
+
+    if (!fs.existsSync(reportFile)) {
+        console.error(`Rapport introuvable : ${reportFile}`);
+        process.exitCode = 1;
+        return;
+    }
+
+    const comment = buildComment(JSON.parse(fs.readFileSync(reportFile, 'utf-8')));
+
+    const prNumber = process.env.GITHUB_REF?.match(/^refs\/pull\/(\d+)\//)?.[1];
     if (!prNumber) {
         console.log('Pas de PR detectee. Commentaire non poste.');
         console.log(comment);
         return;
     }
 
-    const repo = process.env.GITHUB_REPOSITORY;
+    const bodyFile = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'sylius-upgrade-pr-comment.md');
+    fs.writeFileSync(bodyFile, comment);
 
     try {
-        fs.writeFileSync('/tmp/pr-comment.md', comment);
-        execSync(`gh pr comment ${prNumber} --repo ${repo} --body-file /tmp/pr-comment.md`, {
-            env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN }
+        // execFileSync sans shell : aucun argument n'est interprete par un interpreteur de commandes.
+        execFileSync('gh', ['pr', 'comment', prNumber, '--repo', process.env.GITHUB_REPOSITORY, '--body-file', bodyFile], {
+            env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
+            stdio: 'inherit',
         });
         console.log(`Commentaire poste sur la PR #${prNumber}`);
     } catch (error) {
-        console.error('Erreur lors du post du commentaire:', error.message);
-        process.exit(1);
+        // Sur une PR issue d'un fork, le jeton est en lecture seule : le commentaire est un
+        // complement, son echec ne doit pas faire echouer l'audit.
+        console.log(`::warning::Commentaire de PR non poste : ${error.message}`);
     }
 }
 
-main().catch(console.error);
+module.exports = { buildComment, MAX_LISTED_ISSUES };
+
+if (require.main === module) {
+    main();
+}
