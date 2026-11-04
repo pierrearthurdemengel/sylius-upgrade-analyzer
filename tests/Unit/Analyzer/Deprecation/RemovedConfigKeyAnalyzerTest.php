@@ -165,4 +165,134 @@ final class RemovedConfigKeyAnalyzerTest extends TestCase
         /* Au moins 1 cle x 30 minutes */
         self::assertGreaterThanOrEqual(30, $globalIssues[0]->getEstimatedMinutes());
     }
+
+    /**
+     * Cree un projet temporaire dont config/ contient les fichiers donnes.
+     *
+     * @param array<string, string> $files
+     */
+    private function createTempProject(array $files): MigrationReport
+    {
+        $dir = sys_get_temp_dir() . '/removed-config-' . uniqid('', true);
+        foreach ($files as $relativePath => $content) {
+            $path = $dir . '/config/' . $relativePath;
+            if (!is_dir(\dirname($path))) {
+                mkdir(\dirname($path), 0755, true);
+            }
+            file_put_contents($path, $content);
+        }
+        $this->tempDirs[] = $dir;
+
+        return new MigrationReport(
+            startedAt: new \DateTimeImmutable(),
+            detectedSyliusVersion: '1.14.0',
+            targetVersion: '2.2',
+            projectPath: $dir,
+        );
+    }
+
+    /** @var list<string> */
+    private array $tempDirs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempDirs as $dir) {
+            $items = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            );
+            foreach ($items as $item) {
+                $item->isDir() ? rmdir((string) $item->getRealPath()) : unlink((string) $item->getRealPath());
+            }
+            rmdir($dir);
+        }
+    }
+
+    /**
+     * Reproduit Sylius-Standard 1.14 : des lignes "class:" et des chemins "templates" ordinaires
+     * ne doivent pas etre pris pour les parametres supprimes sylius.*.repository.class
+     * ou sylius.mailer.templates.
+     */
+    #[Test]
+    public function testIgnoresUnrelatedClassAndTemplatesKeys(): void
+    {
+        $report = $this->createTempProject([
+            'packages/http_discovery.yaml' => "services:
+    http_discovery.psr17_factory:
+        class: Http\Discovery\Psr17Factory
+",
+            'packages/twig.yaml' => "twig:
+    paths: ['%kernel.project_dir%/templates']
+    form_themes: ['@SyliusUi/Form/theme.html.twig']
+",
+            'services.yaml' => "services:
+    App\:
+        resource: '../src/*'
+    app.checker:
+        class: App\Checker
+",
+        ]);
+
+        (new RemovedConfigKeyAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /** Verifie la detection d'un parametre supprime defini sous parameters, avec sa ligne. */
+    #[Test]
+    public function testDetectsRemovedParameterDefinition(): void
+    {
+        $report = $this->createTempProject([
+            'services.yaml' => 'parameters:
+    locale: fr_FR
+    sylius.mailer.templates: []
+',
+        ]);
+
+        (new RemovedConfigKeyAnalyzer())->analyze($report);
+
+        $issues = array_values(array_filter($report->getIssues(), static fn ($i): bool => str_contains($i->getMessage(), '"sylius.mailer.templates"')));
+        self::assertCount(1, $issues);
+        self::assertSame(3, $issues[0]->getLine());
+    }
+
+    /** Verifie la detection d'un parametre supprime reference sous la forme %nom%. */
+    #[Test]
+    public function testDetectsRemovedParameterReference(): void
+    {
+        $report = $this->createTempProject([
+            'packages/doctrine.yaml' => "services:
+    app.repository:
+        class: '%sylius.mongodb_odm.repository.class%'
+",
+        ]);
+
+        (new RemovedConfigKeyAnalyzer())->analyze($report);
+
+        self::assertCount(1, array_filter($report->getIssues(), static fn ($i): bool => str_contains($i->getMessage(), '"sylius.mongodb_odm.repository.class"')));
+    }
+
+    /** Verifie qu'un noeud de bundle n'est detecte qu'a son chemin exact, y compris sous when@prod. */
+    #[Test]
+    public function testDetectsBundleNodeOnlyAtItsExactPath(): void
+    {
+        $report = $this->createTempProject([
+            'packages/sylius_api.yaml' => 'when@prod:
+    sylius_api:
+        serialization_groups:
+            skip_adding_read_group: true
+',
+            'packages/app.yaml' => 'app:
+    serialization_groups:
+        skip_adding_read_group: true
+    state_machine: custom
+',
+        ]);
+
+        (new RemovedConfigKeyAnalyzer())->analyze($report);
+
+        $messages = array_map(static fn ($i): string => $i->getMessage(), $report->getIssues());
+        self::assertCount(1, array_filter($messages, static fn (string $m): bool => str_contains($m, 'skip_adding_read_group') && str_contains($m, 'sylius_api.yaml')));
+        self::assertCount(0, array_filter($messages, static fn (string $m): bool => str_contains($m, 'app.yaml')));
+    }
 }
