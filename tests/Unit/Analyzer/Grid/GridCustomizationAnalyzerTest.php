@@ -332,7 +332,8 @@ final class GridCustomizationAnalyzerTest extends TestCase
     {
         $this->writeProjectFile('config/packages/broken.yaml', "sylius_grid: [unclosed\n");
         $this->writeProjectFile('config/packages/scalar.yaml', "sylius_grid: enabled\n");
-        $this->writeProjectFile('config/packages/templates.yaml', "sylius_grid:\n    templates:\n        action:\n            show: '@App/Grid/Action/show.html.twig'\n");
+        $this->writeProjectFile('config/packages/templates.yaml', "sylius_grid:\n    templates:\n        action: none\n        filter:\n            brand: '@App/Grid/Filter/brand.html.twig'\n");
+        $this->writeProjectFile('config/packages/action_list.yaml', "sylius_grid:\n    templates:\n        action:\n            - '@App/Grid/Action/show.html.twig'\n            - ['nested']\n");
         $this->writeProjectFile('config/packages/scalar_grids.yaml', "sylius_grid:\n    grids: none\n");
         $this->writeProjectFile('config/packages/empty.yml', "sylius_grid:\n    grids: {}\n");
         $this->writeProjectFile('config/packages/plain.yaml', "just a string\n");
@@ -424,19 +425,20 @@ final class GridCustomizationAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie la detection d'un type de colonne personnalise, estime a 120 minutes.
+     * Verifie la detection d'un type de champ personnalise implementant
+     * FieldTypeInterface (contrat reel de SyliusGridBundle), estime a 120 minutes.
      */
     #[Test]
-    public function testDetectsCustomColumnType(): void
+    public function testDetectsCustomFieldType(): void
     {
-        $filePath = $this->writeProjectFile('src/Grid/Column/MoneyColumnType.php', <<<'PHP'
+        $filePath = $this->writeProjectFile('src/Grid/FieldType/MoneyFieldType.php', <<<'PHP'
             <?php
 
-            namespace App\Grid\Column;
+            namespace App\Grid\FieldType;
 
-            use Sylius\Component\Grid\Definition\Column\ColumnTypeInterface;
+            use Sylius\Component\Grid\FieldTypes\FieldTypeInterface;
 
-            final class MoneyColumnType implements ColumnTypeInterface
+            final class MoneyFieldType implements FieldTypeInterface
             {
             }
             PHP);
@@ -446,26 +448,27 @@ final class GridCustomizationAnalyzerTest extends TestCase
 
         $issues = $report->getIssues();
         self::assertCount(1, $issues);
-        self::assertSame('Type de colonne personnalise detecte : MoneyColumnType', $issues[0]->getMessage());
-        self::assertStringContainsString('(ligne 7) implemente ColumnTypeInterface', $issues[0]->getDetail());
-        self::assertStringContainsString('ColumnTypeInterface dans MoneyColumnType', $issues[0]->getSuggestion());
+        self::assertSame('Type de champ personnalise detecte : MoneyFieldType', $issues[0]->getMessage());
+        self::assertStringContainsString('(ligne 7) implemente FieldTypeInterface', $issues[0]->getDetail());
+        self::assertStringContainsString('FieldTypeInterface dans MoneyFieldType', $issues[0]->getSuggestion());
         self::assertSame(7, $issues[0]->getLine());
         self::assertSame($filePath, $issues[0]->getFile());
         self::assertSame(120, $issues[0]->getEstimatedMinutes());
     }
 
     /**
-     * Verifie la detection d'un type de filtre personnalise, estime a 120 minutes.
+     * Verifie la detection d'un filtre personnalise implementant FilterInterface
+     * par son nom pleinement qualifie, estime a 120 minutes.
      */
     #[Test]
-    public function testDetectsCustomFilterType(): void
+    public function testDetectsCustomFilter(): void
     {
-        $this->writeProjectFile('src/Grid/Filter/BrandFilterType.php', <<<'PHP'
+        $this->writeProjectFile('src/Grid/Filter/BrandFilter.php', <<<'PHP'
             <?php
 
             namespace App\Grid\Filter;
 
-            final class BrandFilterType implements \Sylius\Component\Grid\Filtering\FilterTypeInterface
+            final class BrandFilter implements \Sylius\Component\Grid\Filtering\FilterInterface
             {
             }
             PHP);
@@ -475,25 +478,27 @@ final class GridCustomizationAnalyzerTest extends TestCase
 
         $issues = $report->getIssues();
         self::assertCount(1, $issues);
-        self::assertSame('Type de filtre personnalise detecte : BrandFilterType', $issues[0]->getMessage());
+        self::assertSame('Type de filtre personnalise detecte : BrandFilter', $issues[0]->getMessage());
         self::assertStringContainsString('Ce type de filtre personnalise', $issues[0]->getDetail());
         self::assertSame(120, $issues[0]->getEstimatedMinutes());
     }
 
     /**
-     * Verifie la detection d'un type d'action personnalise, estime comme complexe (240 minutes).
+     * Verifie la detection d'un filtre implementant ConfigurableFilterInterface,
+     * forme recommandee par la documentation de SyliusGridBundle pour les filtres
+     * personnalises (l'interface etend FilterInterface).
      */
     #[Test]
-    public function testDetectsCustomActionTypeAsComplex(): void
+    public function testDetectsConfigurableCustomFilter(): void
     {
-        $this->writeProjectFile('src/Grid/Action/ExportActionType.php', <<<'PHP'
+        $this->writeProjectFile('src/Grid/Filter/SuppliersStatisticsFilter.php', <<<'PHP'
             <?php
 
-            namespace App\Grid\Action;
+            namespace App\Grid\Filter;
 
-            use Sylius\Bundle\GridBundle\ActionType\ActionTypeInterface;
+            use Sylius\Component\Grid\Filtering\ConfigurableFilterInterface;
 
-            final class ExportActionType implements ActionTypeInterface
+            final class SuppliersStatisticsFilter implements ConfigurableFilterInterface
             {
             }
             PHP);
@@ -503,9 +508,96 @@ final class GridCustomizationAnalyzerTest extends TestCase
 
         $issues = $report->getIssues();
         self::assertCount(1, $issues);
-        self::assertSame('Type de action personnalise detecte : ExportActionType', $issues[0]->getMessage());
+        self::assertSame('Type de filtre personnalise detecte : SuppliersStatisticsFilter', $issues[0]->getMessage());
+    }
+
+    /**
+     * Verifie la detection des actions personnalisees : SyliusGridBundle ne definit
+     * aucun contrat PHP pour les actions, chacune est un template Twig declare sous
+     * sylius_grid.templates.action. Chaque action est estimee comme complexe (240 minutes).
+     */
+    #[Test]
+    public function testDetectsCustomActionTemplatesAsComplex(): void
+    {
+        $filePath = $this->writeProjectFile('config/packages/sylius_grid.yaml', <<<'YAML'
+            sylius_grid:
+                templates:
+                    action:
+                        contactSupplier: '@App/Grid/Action/contactSupplier.html.twig'
+                        exportCsv: '@App/Grid/Action/exportCsv.html.twig'
+            YAML);
+        $report = $this->createTempReport();
+
+        (new GridCustomizationAnalyzer())->analyze($report);
+
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame('Type d\'action personnalise detecte : contactSupplier', $issues[0]->getMessage());
+        self::assertSame('Type d\'action personnalise detecte : exportCsv', $issues[1]->getMessage());
+        self::assertStringContainsString('@App/Grid/Action/contactSupplier.html.twig', $issues[0]->getDetail());
+        self::assertSame($filePath, $issues[0]->getFile());
         self::assertSame(Severity::WARNING, $issues[0]->getSeverity());
         self::assertSame(240, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie qu'une classe de grille et un type de champ importes sous alias
+     * sont detectes : la comparaison porte sur les noms resolus.
+     */
+    #[Test]
+    public function testDetectsGridComponentsImportedThroughAlias(): void
+    {
+        $this->writeProjectFile('src/Grid/BrandGrid.php', <<<'PHP'
+            <?php
+
+            namespace App\Grid;
+
+            use Sylius\Bundle\GridBundle\Grid\AbstractGrid as BaseGrid;
+            use Sylius\Component\Grid\FieldTypes\FieldTypeInterface as SyliusFieldType;
+
+            final class BrandGrid extends BaseGrid
+            {
+            }
+
+            final class BrandLogoFieldType implements SyliusFieldType
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new GridCustomizationAnalyzer())->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+        self::assertSame([
+            'Classe de grille personnalisee detectee : BrandGrid',
+            'Type de champ personnalise detecte : BrandLogoFieldType',
+        ], $messages);
+    }
+
+    /**
+     * Verifie que des classes homonymes d'autres espaces de noms (AbstractGrid,
+     * FilterInterface applicatifs) ne sont pas confondues avec celles de Sylius.
+     */
+    #[Test]
+    public function testIgnoresHomonymousGridTypesFromOtherNamespaces(): void
+    {
+        $this->writeProjectFile('src/Report/SalesGrid.php', <<<'PHP'
+            <?php
+
+            namespace App\Report;
+
+            use App\Report\Contract\FilterInterface;
+            use App\Report\Layout\AbstractGrid;
+
+            final class SalesGrid extends AbstractGrid implements FilterInterface
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new GridCustomizationAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
     }
 
     /**
@@ -522,8 +614,8 @@ final class GridCustomizationAnalyzerTest extends TestCase
             namespace App\Grid;
 
             /**
-             * Reference AbstractGrid, ResourceAwareGridInterface, ColumnTypeInterface,
-             * FilterTypeInterface et ActionTypeInterface sans les utiliser.
+             * Reference AbstractGrid, ResourceAwareGridInterface, FieldTypeInterface
+             * et FilterInterface sans les utiliser.
              */
             final class GridRegistry extends \ArrayObject implements \Countable
             {
@@ -535,7 +627,7 @@ final class GridCustomizationAnalyzerTest extends TestCase
             PHP);
         $this->writeProjectFile(
             'src/Grid/BrokenGrid.php',
-            "<?php\n\nclass BrokenGrid extends AbstractGrid implements ResourceAwareGridInterface, ColumnTypeInterface, FilterTypeInterface, ActionTypeInterface {\n",
+            "<?php\n\nclass BrokenGrid extends AbstractGrid implements ResourceAwareGridInterface, FieldTypeInterface, FilterInterface {\n",
         );
         $report = $this->createTempReport();
 
