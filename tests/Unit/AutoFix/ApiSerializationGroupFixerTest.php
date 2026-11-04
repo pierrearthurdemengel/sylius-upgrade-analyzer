@@ -84,6 +84,23 @@ final class ApiSerializationGroupFixerTest extends TestCase
     }
 
     #[Test]
+    public function testPrefixesResourceGroupsLikeTheOfficialGuide(): void
+    {
+        /* Exemple d'UPGRADE-API-2.0.md : admin:product:index devient sylius:admin:product:index */
+        $filePath = $this->tempDir . '/config/serialization/Product.yaml';
+        mkdir(dirname($filePath), 0755, true);
+        file_put_contents($filePath, "App\\Entity\\Product\\Product:\n    attributes:\n        giftWrap:\n            groups: ['admin:product:index', \"shop:product:show\", 'sylius:admin:product:show']\n");
+
+        $fix = $this->fixer->fix($this->createIssue('config/serialization/Product.yaml'), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertStringContainsString(
+            "groups: ['sylius:admin:product:index', \"sylius:shop:product:show\", 'sylius:admin:product:show']",
+            $fix->fixedContent,
+        );
+    }
+
+    #[Test]
     public function testReturnsNullWhenAlreadyPrefixed(): void
     {
         $file = 'src/Entity/Product.php';

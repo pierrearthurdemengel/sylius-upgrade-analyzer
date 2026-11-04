@@ -117,7 +117,7 @@ final class PaymentRequestEnvAnalyzer implements AnalyzerInterface
                     $envVar,
                 ),
                 suggestion: sprintf(
-                    'Ajouter %s=doctrine://default dans le fichier .env du projet.',
+                    'Ajouter %s=sync:// dans le fichier .env du projet.',
                     $envVar,
                 ),
                 docUrl: self::DOC_URL,

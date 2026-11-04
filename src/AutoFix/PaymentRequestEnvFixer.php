@@ -14,10 +14,10 @@ final class PaymentRequestEnvFixer implements AutoFixInterface
 {
     private const TARGET_ANALYZER = 'Payment Request Env';
 
-    /** Variables d'environnement a ajouter */
+    /** Variables d'environnement a ajouter, avec les valeurs de UPGRADE-2.0.md (transport synchrone) */
     private const ENV_VARS = [
-        'SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN' => 'doctrine://default',
-        'SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN' => 'doctrine://default?queue_name=payment_request_failed',
+        'SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN' => 'sync://',
+        'SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN' => 'sync://',
     ];
 
     public function getName(): string

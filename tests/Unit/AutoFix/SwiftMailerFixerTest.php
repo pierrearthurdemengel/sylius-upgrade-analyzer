@@ -11,6 +11,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\SwiftMailerFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Tests unitaires pour le fixer SwiftMailer → Symfony Mailer.
@@ -105,9 +106,47 @@ final class SwiftMailerFixerTest extends TestCase
         $fix = $this->fixer->fix($issue, $this->tempDir);
 
         self::assertNotNull($fix);
-        self::assertSame(FixConfidence::HIGH, $fix->confidence);
-        self::assertStringContainsString('Symfony\\Component\\Mime\\Email', $fix->fixedContent);
+        /* L'API d'Email differe de Swift_Message : le correctif n'est qu'un point de depart */
+        self::assertSame(FixConfidence::LOW, $fix->confidence);
+        self::assertStringContainsString('new \\Symfony\\Component\\Mime\\Email(', $fix->fixedContent);
         self::assertStringNotContainsString('Swift_Message', $fix->fixedContent);
+    }
+
+    #[Test]
+    public function testUsesFullyQualifiedNamesInNamespacedFile(): void
+    {
+        $filePath = $this->tempDir . '/src/Service/Mailer.php';
+        mkdir(dirname($filePath), 0755, true);
+        file_put_contents($filePath, "<?php\n\nnamespace App\\Service;\n\nuse Swift_Mailer;\n\nfinal class Mailer\n{\n    public function __construct(private Swift_Mailer \$mailer, private \\Swift_MessageFactory \$factory)\n    {\n    }\n}\n");
+
+        $fix = $this->fixer->fix($this->createIssue('src/Service/Mailer.php'), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertStringContainsString('use \\Symfony\\Component\\Mailer\\MailerInterface;', $fix->fixedContent);
+        self::assertStringContainsString('private \\Symfony\\Component\\Mailer\\MailerInterface $mailer', $fix->fixedContent);
+        /* Une classe dont le nom commence comme une classe SwiftMailer n'est pas touchee */
+        self::assertStringContainsString('\\Swift_MessageFactory $factory', $fix->fixedContent);
+    }
+
+    #[Test]
+    public function testGeneratesValidMailerConfigurationFromSwiftmailerBlock(): void
+    {
+        $filePath = $this->tempDir . '/config/packages/swiftmailer.yaml';
+        mkdir(dirname($filePath), 0755, true);
+        file_put_contents($filePath, "swiftmailer:\n    url: '%env(MAILER_URL)%'\n    spool: { type: memory }\n\nservices:\n    App\\Mailer:\n        arguments: ['@swiftmailer.mailer']\n");
+
+        $fix = $this->fixer->fix($this->createIssue('config/packages/swiftmailer.yaml'), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
+        self::assertSame(
+            [
+                'framework' => ['mailer' => ['dsn' => '%env(MAILER_DSN)%']],
+                'services' => ['App\\Mailer' => ['arguments' => ['@mailer']]],
+            ],
+            Yaml::parse($fix->fixedContent),
+        );
+        self::assertStringContainsString("#     url: '%env(MAILER_URL)%'", $fix->fixedContent);
     }
 
     #[Test]

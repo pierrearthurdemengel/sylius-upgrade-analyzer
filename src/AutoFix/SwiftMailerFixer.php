@@ -71,8 +71,11 @@ final class SwiftMailerFixer implements AutoFixInterface
             return null;
         }
 
+        /* En PHP, seuls les noms de classes changent : les API different (setSubject() devient
+           subject(), Mailer et Transport ne s'instancient plus avec new), le code reste a reecrire.
+           En YAML, la configuration generee est correcte mais la variable MAILER_DSN reste a definir. */
         return new MigrationFix(
-            confidence: FixConfidence::HIGH,
+            confidence: $extension === 'php' ? FixConfidence::LOW : FixConfidence::MEDIUM,
             filePath: $absolutePath,
             originalContent: $originalContent,
             fixedContent: $fixedContent,
@@ -88,8 +91,14 @@ final class SwiftMailerFixer implements AutoFixInterface
      */
     private function fixPhpFile(string $content): string
     {
+        /* Noms toujours pleinement qualifies : dans un fichier avec namespace, un nom relatif
+           se resoudrait en App\...\Symfony\Component\Mime\Email. */
         foreach (self::CLASS_MAPPING as $old => $new) {
-            $content = str_replace($old, $new, $content);
+            $content = (string) preg_replace(
+                '/(?<![\\\\\w])\\\\?' . preg_quote(ltrim($old, '\\'), '/') . '\b/',
+                '\\\\' . str_replace('\\', '\\\\', ltrim($new, '\\')),
+                $content,
+            );
         }
 
         /* Remplacement des use statements */
@@ -107,10 +116,21 @@ final class SwiftMailerFixer implements AutoFixInterface
      */
     private function fixYamlFile(string $content): string
     {
-        /* Remplacement du bloc de configuration racine */
-        $content = (string) preg_replace(
-            '/^swiftmailer:/m',
-            'framework:' . "\n" . '    mailer:',
+        /* Le bloc racine swiftmailer est remplace par framework.mailer.dsn ; l'ancien bloc est
+           conserve en commentaire pour reporter les options particulieres (spool, delivery_addresses). */
+        $content = (string) preg_replace_callback(
+            '/^swiftmailer:[^\n]*\n(?:(?:[ \t]+[^\n]*|[ \t]*)(?:\n|$))*/m',
+            static function (array $match): string {
+                $oldBlock = rtrim($match[0]);
+                $commented = implode("\n", array_map(
+                    static fn (string $line): string => '# ' . $line,
+                    explode("\n", $oldBlock),
+                ));
+
+                return "framework:\n    mailer:\n        dsn: '%env(MAILER_DSN)%'\n\n"
+                    . "# TODO: ancienne configuration SwiftMailer, a reporter dans framework.mailer puis supprimer\n"
+                    . $commented . "\n";
+            },
             $content,
         );
 

@@ -11,6 +11,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\RemovedPaymentGatewayFixer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Tests unitaires pour le fixer de passerelles de paiement supprimees.
@@ -79,7 +80,17 @@ final class RemovedPaymentGatewayFixerTest extends TestCase
 
         self::assertNotNull($fix);
         self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
-        self::assertStringContainsString('# TODO: gateway supprimee dans Sylius 2.0', $fix->fixedContent);
+        /* Tout le bloc est commente : factory_name ne doit pas remonter sous gateways */
+        self::assertSame(
+            'gateways:
+    # TODO: passerelle supprimee du coeur dans Sylius 2.0, a remplacer par un plugin de paiement
+'
+            . '    # stripe_checkout:
+    #     factory_name: stripe_checkout
+',
+            $fix->fixedContent,
+        );
+        self::assertSame(['gateways' => null], Yaml::parse($fix->fixedContent));
     }
 
     #[Test]
@@ -92,7 +103,27 @@ final class RemovedPaymentGatewayFixerTest extends TestCase
         $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
 
         self::assertNotNull($fix);
-        self::assertStringContainsString('# TODO: gateway supprimee dans Sylius 2.0', $fix->fixedContent);
+        self::assertStringContainsString('# paypal_express_checkout:', $fix->fixedContent);
+        self::assertStringContainsString('#     factory_name: paypal_express_checkout', $fix->fixedContent);
+    }
+
+    #[Test]
+    public function testKeepsOtherGatewaysIntact(): void
+    {
+        $file = 'config/gateways.yaml';
+        file_put_contents($this->tempDir . '/' . $file, 'gateways:
+    stripe_checkout:
+        factory_name: stripe_checkout
+
+        config: { publishable_key: pk }
+    offline:
+        factory_name: offline
+');
+
+        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertSame(['gateways' => ['offline' => ['factory_name' => 'offline']]], Yaml::parse($fix->fixedContent));
     }
 
     #[Test]
@@ -108,10 +139,11 @@ final class RemovedPaymentGatewayFixerTest extends TestCase
     }
 
     #[Test]
-    public function testSupportsYamlAndPhpFiles(): void
+    public function testSupportsYamlFilesOnly(): void
     {
+        /* Aucun correctif ne touche au code PHP de paiement */
         self::assertTrue($this->fixer->supports($this->createIssue('config/gateways.yaml')));
-        self::assertTrue($this->fixer->supports($this->createIssue('src/Gateway.php')));
+        self::assertFalse($this->fixer->supports($this->createIssue('src/Gateway.php')));
         self::assertFalse($this->fixer->supports($this->createIssue('templates/payment.html.twig')));
     }
 }

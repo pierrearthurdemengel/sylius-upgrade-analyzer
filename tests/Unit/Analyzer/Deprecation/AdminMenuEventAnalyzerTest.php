@@ -104,7 +104,7 @@ PHP);
     }
 
     /**
-     * Verifie la detection d'un subscriber sur sylius.menu.admin.*.
+     * Verifie la detection d'un subscriber sur un menu supprime en Sylius 2.0.
      */
     #[Test]
     public function testDetectsMenuEventSubscriber(): void
@@ -122,7 +122,7 @@ class AdminMenuListener implements EventSubscriberInterface
 {
     public static function getSubscribedEvents(): array
     {
-        return ['sylius.menu.admin.main' => 'addMenuItems'];
+        return ['sylius.menu.admin.order.show' => 'addMenuItems'];
     }
 
     public function addMenuItems($event): void {}
@@ -136,9 +136,70 @@ PHP);
 
         $menuIssues = array_filter(
             $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'sylius.menu.admin.main'),
+            static fn ($issue): bool => str_contains($issue->getMessage(), 'sylius.menu.admin.order.show'),
         );
         self::assertNotEmpty($menuIssues);
+    }
+
+    /**
+     * Verifie que le menu principal, conserve en Sylius 2.0, n'est pas signale.
+     */
+    #[Test]
+    public function testIgnoresMainMenuWhichStillExistsInSylius2(): void
+    {
+        $srcDir = $this->tempDir . '/src';
+        mkdir($srcDir, 0755, true);
+        file_put_contents($srcDir . '/AdminMenuListener.php', <<<'PHP'
+<?php
+
+namespace App\EventListener;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+#[AsEventListener(event: 'sylius.menu.admin.main')]
+class AdminMenuListener implements EventSubscriberInterface
+{
+    public static function getSubscribedEvents(): array
+    {
+        return ['sylius.menu.admin.main' => 'addMenuItems', 'sylius.menu.shop.account' => 'addAccountItems'];
+    }
+}
+PHP);
+
+        $report = $this->createReport();
+        (new AdminMenuEventAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection d'un attribut #[AsEventListener] sur un menu supprime.
+     */
+    #[Test]
+    public function testDetectsEventListenerAttributeOnRemovedMenu(): void
+    {
+        $srcDir = $this->tempDir . '/src';
+        mkdir($srcDir, 0755, true);
+        file_put_contents($srcDir . '/ProductFormMenuListener.php', <<<'PHP'
+<?php
+
+namespace App\EventListener;
+
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: 'sylius.menu.admin.product.form')]
+final class ProductFormMenuListener
+{
+}
+PHP);
+
+        $report = $this->createReport();
+        (new AdminMenuEventAnalyzer())->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+        self::assertContains('Attribut #[AsEventListener] sur l\'evenement "sylius.menu.admin.product.form" detecte', $messages);
+        self::assertContains('1 gestionnaire(s) d\'evenements de menu admin supprime(s) detecte(s)', $messages);
     }
 
     /**
@@ -160,7 +221,7 @@ class AdminMenuListener implements EventSubscriberInterface
 {
     public static function getSubscribedEvents(): array
     {
-        return ['sylius.menu.admin.main' => 'addMenuItems'];
+        return ['sylius.menu.admin.customer.show' => 'addMenuItems'];
     }
 
     public function addMenuItems($event): void {}
@@ -172,6 +233,7 @@ PHP);
 
         $analyzer->analyze($report);
 
+        self::assertNotEmpty($report->getIssues());
         foreach ($report->getIssues() as $issue) {
             self::assertSame(Severity::WARNING, $issue->getSeverity());
         }

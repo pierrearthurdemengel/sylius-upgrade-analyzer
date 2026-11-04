@@ -14,17 +14,11 @@ final class ApiSerializationGroupFixer implements AutoFixInterface
 {
     private const TARGET_ANALYZER = 'API Serialization Group';
 
-    /** Groupes de serialization a prefixer */
-    private const GROUPS_TO_PREFIX = [
-        "'admin:read'" => "'sylius:admin:read'",
-        "'admin:write'" => "'sylius:admin:write'",
-        "'shop:read'" => "'sylius:shop:read'",
-        "'shop:write'" => "'sylius:shop:write'",
-        '"admin:read"' => '"sylius:admin:read"',
-        '"admin:write"' => '"sylius:admin:write"',
-        '"shop:read"' => '"sylius:shop:read"',
-        '"shop:write"' => '"sylius:shop:write"',
-    ];
+    /**
+     * Groupe admin: ou shop: entre guillemets, sans prefixe sylius: (meme motif que l'analyseur).
+     * UPGRADE-API-2.0.md : admin:product:index devient sylius:admin:product:index.
+     */
+    private const UNPREFIXED_GROUP_PATTERN = '/([\'"])((?:admin|shop):[a-z_]+(?::[a-z_]+)*)\1/';
 
     public function getName(): string
     {
@@ -58,11 +52,9 @@ final class ApiSerializationGroupFixer implements AutoFixInterface
         }
 
         $originalContent = (string) file_get_contents($absolutePath);
-        $fixedContent = $originalContent;
-
-        foreach (self::GROUPS_TO_PREFIX as $old => $new) {
-            $fixedContent = str_replace($old, $new, $fixedContent);
-        }
+        /* Les groupes propres au projet sont prefixes eux aussi : le renommage reste coherent
+           tant que tous les fichiers signales sont corriges ensemble. */
+        $fixedContent = (string) preg_replace(self::UNPREFIXED_GROUP_PATTERN, '$1sylius:$2$1', $originalContent);
 
         if ($fixedContent === $originalContent) {
             return null;

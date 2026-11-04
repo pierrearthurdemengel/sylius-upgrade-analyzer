@@ -6,6 +6,8 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\AutoFix;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigHookMigrationMapper;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Fixer pour la migration des surcharges de templates Twig vers les hooks Twig Sylius 2.x.
@@ -80,8 +82,16 @@ final class TwigHookFixer implements AutoFixInterface
         /* Ajout de la configuration au fichier existant */
         $fixedContent = $this->mergeHookConfig($existingConfig, $hookConfig);
 
+        /* La fusion est textuelle : si le hook n'arrive pas a sa place (fichier existant
+           structure autrement), aucun correctif plutot qu'une configuration ignoree ou invalide. */
+        if (!$this->registersHook($fixedContent, $hookName, $hookComponentName)) {
+            return null;
+        }
+
+        /* Le template du composant (hooks/...) reste a creer a partir de la surcharge :
+           tant qu'il n'existe pas, le rendu de la page echoue. */
         return new MigrationFix(
-            confidence: FixConfidence::HIGH,
+            confidence: FixConfidence::MEDIUM,
             filePath: $configFilePath,
             originalContent: $existingConfig,
             fixedContent: $fixedContent,
@@ -141,11 +151,12 @@ final class TwigHookFixer implements AutoFixInterface
         $templateName = preg_replace('/\.html\.twig$/', '', $bundlePath);
         $hookTemplatePath = sprintf('hooks/%s.html.twig', str_replace('/', '_', (string) $templateName));
 
+        /* Indentation de sylius_twig_hooks > hooks > nom du hook > composant */
         $yaml = sprintf(
-            "    %s:\n"
-            . "        %s:\n"
-            . "            template: '%s'\n"
-            . "            # priority: 0\n",
+            "        %s:\n"
+            . "            %s:\n"
+            . "                template: '%s'\n"
+            . "                # priority: 0\n",
             $hookName,
             $componentName,
             $hookTemplatePath,
@@ -157,6 +168,21 @@ final class TwigHookFixer implements AutoFixInterface
     /**
      * Fusionne la nouvelle configuration de hook avec la configuration existante.
      */
+    /**
+     * Verifie que la configuration produite enregistre le composant sous sylius_twig_hooks.hooks.
+     */
+    private function registersHook(string $yaml, string $hookName, string $componentName): bool
+    {
+        try {
+            $config = Yaml::parse($yaml);
+        } catch (ParseException) {
+            return false;
+        }
+
+        return \is_array($config)
+            && \is_array($config['sylius_twig_hooks']['hooks'][$hookName][$componentName] ?? null);
+    }
+
     private function mergeHookConfig(string $existingConfig, string $hookConfig): string
     {
         /* Si le fichier est vide, creation de la structure de base */

@@ -98,7 +98,7 @@ This produces a sprint-by-sprint breakdown showing:
 The recommended order of migration is:
 
 1. **Breaking changes first** -- These will prevent the project from running on Sylius 2.x
-2. **High-effort items early** -- Payum migration, state machine conversion, plugin replacements
+2. **High-effort items early** -- state machine conversion, removed payment gateways, plugin replacements
 3. **Frontend last** -- Semantic UI / jQuery migration can be done incrementally
 4. **Suggestions optional** -- Address as time permits
 
@@ -152,13 +152,13 @@ The auto-fixer generates the basic Symfony Workflow structure, but callbacks req
 3. Map `after` callbacks to `workflow.<name>.completed.*` events
 4. Map `guard` callbacks to `workflow.<name>.guard.*` events
 
-### Step 3.3: Migrate Payum gateways
+### Step 3.3: Review payment gateways
 
-For each payment gateway:
+Sylius 2.0 still supports Payum through `SyliusPayumBundle`, so existing gateways keep working. What must change:
 
-1. Create a Payment Request handler implementing the new Sylius payment interface
-2. Configure the handler as a Symfony service
-3. Remove the old Payum gateway configuration
+1. Replace the Stripe Checkout and PayPal Express gateways, removed from the core, with their payment plugins
+2. Import `@SyliusPayumBundle/Resources/config/app/config.yaml` and move the `gateway_config` resource from `sylius_payum` to `sylius_payment`, as shown in `UPGRADE-2.0.md`
+3. Optionally, convert Payum gateways to Payment Request handlers (the analyzer lists them as suggestions)
 4. Test payment flows thoroughly
 
 ### Step 3.4: Migrate templates to Twig hooks

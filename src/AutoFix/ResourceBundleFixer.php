@@ -48,8 +48,10 @@ final class ResourceBundleFixer implements AutoFixInterface
         $originalContent = (string) file_get_contents($absolutePath);
         $fixedContent = $originalContent;
 
-        /* Remplacement des anciens drivers */
-        $fixedContent = str_replace('driver: doctrine/orm', 'driver: doctrine_orm', $fixedContent);
+        /* Seuls les drivers PHPCR et MongoDB sont retires (DoctrinePHPCRDriver et
+           ODM\MongoDB\DocumentRepository dans UPGRADE-2.0.md). "doctrine/orm" reste la valeur
+           de SyliusResourceBundle::DRIVER_DOCTRINE_ORM dans la version 1.12 requise par Sylius 2 :
+           il ne faut pas y toucher. */
         $fixedContent = str_replace('driver: doctrine/phpcr-odm', '# TODO: PHPCR supprime — driver: doctrine/phpcr-odm', $fixedContent);
         $fixedContent = str_replace('driver: doctrine/mongodb-odm', '# TODO: MongoDB supprime — driver: doctrine/mongodb-odm', $fixedContent);
 

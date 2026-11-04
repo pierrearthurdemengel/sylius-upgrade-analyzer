@@ -36,7 +36,8 @@ final class RemovedPaymentGatewayFixer implements AutoFixInterface
             return false;
         }
 
-        return (bool) preg_match('/\.(yaml|yml|php)$/i', $file);
+        /* Configuration YAML uniquement : aucun correctif ne touche au code PHP de paiement */
+        return (bool) preg_match('/\.(yaml|yml)$/i', $file);
     }
 
     public function fix(MigrationIssue $issue, string $projectPath): ?MigrationFix
@@ -55,11 +56,11 @@ final class RemovedPaymentGatewayFixer implements AutoFixInterface
         $fixedContent = $originalContent;
 
         foreach (self::REMOVED_GATEWAYS as $gateway) {
-            /* Commentaire des lignes contenant la gateway dans les YAML */
-            $fixedContent = (string) preg_replace(
-                '/^(\s*)(' . preg_quote($gateway, '/') . ')/m',
-                '$1# TODO: gateway supprimee dans Sylius 2.0 — $2',
+            /* Toute la definition de la passerelle est commentee, pas seulement sa cle */
+            $fixedContent = YamlBlockCommenter::comment(
                 $fixedContent,
+                preg_quote($gateway, '/'),
+                'passerelle supprimee du coeur dans Sylius 2.0, a remplacer par un plugin de paiement',
             );
         }
 

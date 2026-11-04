@@ -17,8 +17,12 @@ use Symfony\Component\Finder\Finder;
 
 /**
  * Analyseur des evenements de menu d'administration Sylius.
- * Sylius 2.0 modifie le systeme de menus d'administration.
- * Les listeners/subscribers sur sylius.menu.admin.* doivent etre adaptes.
+ *
+ * Sylius 2.0 supprime cinq menu builders de l'administration (UPGRADE-2.0.md, services
+ * supprimes) : leurs evenements ne sont plus jamais declenches et les listeners qui les
+ * ecoutent cessent d'agir sans erreur. Ces menus passent par les Twig Hooks. Le menu
+ * principal (sylius.menu.admin.main) et le menu du compte client sont conserves a
+ * l'identique : leurs listeners continuent de fonctionner et ne sont pas signales.
  */
 final class AdminMenuEventAnalyzer implements AnalyzerInterface
 {
@@ -30,6 +34,19 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
 
     /** Prefixe des evenements de menu d'administration */
     private const MENU_EVENT_PREFIX = 'sylius.menu.admin';
+
+    /**
+     * Evenements des menu builders supprimes en Sylius 2.0 (EVENT_NAME de
+     * CustomerShowMenuBuilder, OrderShowMenuBuilder, ProductFormMenuBuilder,
+     * ProductVariantFormMenuBuilder et PromotionUpdateMenuBuilder en 1.14).
+     */
+    private const REMOVED_MENU_EVENTS = [
+        'sylius.menu.admin.customer.show',
+        'sylius.menu.admin.order.show',
+        'sylius.menu.admin.product.form',
+        'sylius.menu.admin.product_variant.form',
+        'sylius.menu.admin.promotion.update',
+    ];
 
     public function getName(): string
     {
@@ -74,14 +91,14 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
                 category: Category::DEPRECATION,
                 analyzer: $this->getName(),
                 message: sprintf(
-                    '%d gestionnaire(s) d\'evenements de menu admin detecte(s)',
+                    '%d gestionnaire(s) d\'evenements de menu admin supprime(s) detecte(s)',
                     $eventCount,
                 ),
-                detail: 'Sylius 2.0 modifie le systeme de menus d\'administration. '
-                    . 'Les listeners et subscribers sur les evenements sylius.menu.admin.* '
-                    . 'doivent etre adaptes au nouveau systeme.',
-                suggestion: 'Adapter les gestionnaires de menu admin au nouveau systeme '
-                    . 'de menus de Sylius 2.0.',
+                detail: 'Sylius 2.0 supprime les menus admin des pages client, commande, produit, '
+                    . 'variante et promotion : leurs evenements ne sont plus declenches et ces '
+                    . 'gestionnaires n\'agissent plus.',
+                suggestion: 'Reporter les entrees de menu ajoutees par ces gestionnaires dans les '
+                    . 'Twig Hooks des pages concernees.',
                 docUrl: self::DOC_URL,
                 estimatedMinutes: $eventCount * self::MINUTES_PER_EVENT_MENU,
             ));
@@ -197,6 +214,9 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
             $traverser->traverse($ast);
 
             foreach ($visitor->usages as $usage) {
+                if (!\in_array($usage['event'], self::REMOVED_MENU_EVENTS, true)) {
+                    continue;
+                }
                 $count++;
                 $report->addIssue(new MigrationIssue(
                     severity: Severity::WARNING,
@@ -208,13 +228,14 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
                     ),
                     detail: sprintf(
                         'Un attribut #[AsEventListener] ciblant l\'evenement "%s" a ete trouve '
-                        . 'dans %s ligne %d. Le systeme de menus admin change dans Sylius 2.0.',
+                        . 'dans %s ligne %d. Ce menu est supprime dans Sylius 2.0 : l\'evenement '
+                        . 'n\'est plus declenche.',
                         $usage['event'],
                         $file->getRelativePathname(),
                         $usage['line'],
                     ),
                     suggestion: sprintf(
-                        'Adapter le listener sur "%s" au nouveau systeme de menus de Sylius 2.0.',
+                        'Reporter les entrees ajoutees sur "%s" dans les Twig Hooks de la page.',
                         $usage['event'],
                     ),
                     file: $filePath,
@@ -317,6 +338,9 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
             $traverser->traverse($ast);
 
             foreach ($visitor->subscriptions as $subscription) {
+                if (!\in_array($subscription['event'], self::REMOVED_MENU_EVENTS, true)) {
+                    continue;
+                }
                 $count++;
                 $report->addIssue(new MigrationIssue(
                     severity: Severity::WARNING,
@@ -328,13 +352,13 @@ final class AdminMenuEventAnalyzer implements AnalyzerInterface
                     ),
                     detail: sprintf(
                         'La methode getSubscribedEvents() dans %s souscrit a l\'evenement "%s" (ligne %d). '
-                        . 'Le systeme de menus admin est modifie dans Sylius 2.0.',
+                        . 'Ce menu est supprime dans Sylius 2.0 : l\'evenement n\'est plus declenche.',
                         $file->getRelativePathname(),
                         $subscription['event'],
                         $subscription['line'],
                     ),
                     suggestion: sprintf(
-                        'Migrer la souscription a "%s" vers le nouveau systeme de menus de Sylius 2.0.',
+                        'Reporter les entrees ajoutees sur "%s" dans les Twig Hooks de la page.',
                         $subscription['event'],
                     ),
                     file: $filePath,

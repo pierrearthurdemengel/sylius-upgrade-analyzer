@@ -7,7 +7,6 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Deprecation;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\PayumAnalyzer;
-use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
@@ -77,11 +76,11 @@ final class PayumAnalyzerTest extends TestCase
     }
 
     /**
-     * Vérifie la détection des dépendances Payum dans composer.json.
-     * Le projet complexe déclare payum/core et payum/payum-bundle.
+     * Vérifie que les dépendances Payum ne sont pas signalées : sylius/sylius 2.0 requiert
+     * lui-même payum/payum-bundle, les retirer casserait le projet.
      */
     #[Test]
-    public function testDetectsPayumDependency(): void
+    public function testDoesNotFlagPayumDependency(): void
     {
         $analyzer = new PayumAnalyzer();
         $report = $this->createReportForFixture('project-complex');
@@ -95,8 +94,7 @@ final class PayumAnalyzerTest extends TestCase
                 && str_contains($issue->getMessage(), 'detectee dans composer.json'),
         );
 
-        /* Le projet complexe déclare payum/core et payum/payum-bundle */
-        self::assertCount(2, $composerIssues);
+        self::assertCount(0, $composerIssues);
     }
 
     /**
@@ -122,21 +120,23 @@ final class PayumAnalyzerTest extends TestCase
     }
 
     /**
-     * Vérifie que tous les problèmes créés sont de sévérité BREAKING.
-     * La migration depuis Payum est un changement cassant.
+     * Vérifie que tous les problèmes créés sont des suggestions : Payum reste supporté par
+     * Sylius 2.0 et la migration vers les Payment Requests est optionnelle.
      */
     #[Test]
-    public function testCreatesBreakingIssues(): void
+    public function testCreatesOnlySuggestionsBecausePayumRemainsSupported(): void
     {
         $analyzer = new PayumAnalyzer();
         $report = $this->createReportForFixture('project-complex');
 
         $analyzer->analyze($report);
 
-        /* Tous les problèmes détectés doivent être de sévérité BREAKING */
+        self::assertNotEmpty($report->getIssues());
         foreach ($report->getIssues() as $issue) {
-            self::assertSame(Severity::BREAKING, $issue->getSeverity());
+            self::assertSame(Severity::SUGGESTION, $issue->getSeverity());
         }
+        /* Les suggestions n'entrent pas dans le total d'heures du rapport */
+        self::assertSame(0.0, $report->getTotalEstimatedHours());
     }
 
     /**
@@ -165,7 +165,7 @@ final class PayumAnalyzerTest extends TestCase
         /* Recherche du problème global résumant la migration */
         $globalIssues = array_values(array_filter(
             $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'Migration Payum requise'),
+            static fn ($issue): bool => str_contains($issue->getMessage(), 'Migration optionnelle vers les Payment Requests'),
         ));
 
         self::assertNotEmpty($globalIssues, 'Le problème global devrait être présent.');
@@ -243,13 +243,12 @@ final class PayumAnalyzerTest extends TestCase
     }
 
     /**
-     * Vérifie que la dépendance composer seule produit un problème détaillé
-     * mais aucun résumé global, faute de gateway à estimer.
+     * Vérifie qu'un projet qui ne fait que dépendre de Payum ne produit aucun problème.
      */
     #[Test]
-    public function testComposerDependencyIssueContainsVersionWithoutGlobalSummary(): void
+    public function testDependencyAloneProducesNoIssue(): void
     {
-        $composerPath = $this->writeComposerJson(['require' => [
+        $this->writeComposerJson(['require' => [
             'sylius/sylius' => '~1.12.0',
             'payum/core' => '^1.7.3',
         ]]);
@@ -259,13 +258,7 @@ final class PayumAnalyzerTest extends TestCase
 
         $analyzer->analyze($report);
 
-        $issues = $report->getIssues();
-        self::assertCount(1, $issues);
-        self::assertSame('Dependance payum/core detectee dans composer.json', $issues[0]->getMessage());
-        self::assertStringContainsString('La version ^1.7.3 de payum/core', $issues[0]->getDetail());
-        self::assertSame($composerPath, $issues[0]->getFile());
-        self::assertSame(Category::DEPRECATION, $issues[0]->getCategory());
-        self::assertSame(0, $issues[0]->getEstimatedMinutes());
+        self::assertSame([], $report->getIssues());
     }
 
     /**
@@ -305,11 +298,11 @@ YAML);
 
         $issues = $report->getIssues();
         self::assertCount(2, $issues);
-        self::assertSame('Gateway Payum "paypal_express_checkout" a migrer', $issues[0]->getMessage());
+        self::assertSame('Gateway Payum "paypal_express_checkout" convertible en Payment Request', $issues[0]->getMessage());
         self::assertStringContainsString('payum.yml', $issues[0]->getDetail());
         self::assertSame(realpath($filePath), $issues[0]->getFile());
         self::assertSame(
-            'Migration Payum requise : 1 gateway(s) standard, 0 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
+            'Migration optionnelle vers les Payment Requests : 1 gateway(s) standard, 0 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $issues[1]->getMessage(),
         );
         self::assertSame(120, $issues[1]->getEstimatedMinutes());
@@ -403,11 +396,11 @@ PHP);
 
         $globalIssues = array_values(array_filter(
             $report->getIssues(),
-            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration Payum requise'),
+            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration optionnelle vers les Payment Requests'),
         ));
         self::assertCount(1, $globalIssues);
         self::assertSame(
-            'Migration Payum requise : 0 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
+            'Migration optionnelle vers les Payment Requests : 0 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $globalIssues[0]->getMessage(),
         );
         self::assertSame(480, $globalIssues[0]->getEstimatedMinutes());
@@ -543,15 +536,15 @@ PHP);
 
         $globalIssues = array_values(array_filter(
             $report->getIssues(),
-            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration Payum requise'),
+            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration optionnelle vers les Payment Requests'),
         ));
         self::assertCount(1, $globalIssues);
         self::assertSame(
-            'Migration Payum requise : 1 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
+            'Migration optionnelle vers les Payment Requests : 1 gateway(s) standard, 1 gateway(s) personnalisee(s) et 0 autre(s) fichier(s) PHP dependant de Payum',
             $globalIssues[0]->getMessage(),
         );
         self::assertSame(600, $globalIssues[0]->getEstimatedMinutes());
-        self::assertSame(Severity::BREAKING, $globalIssues[0]->getSeverity());
+        self::assertSame(Severity::SUGGESTION, $globalIssues[0]->getSeverity());
     }
 
     /**
@@ -593,11 +586,11 @@ PHP);
 
         $globalIssues = array_values(array_filter(
             $report->getIssues(),
-            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration Payum requise'),
+            static fn ($issue): bool => str_starts_with($issue->getMessage(), 'Migration optionnelle vers les Payment Requests'),
         ));
         self::assertCount(1, $globalIssues);
         self::assertSame(
-            'Migration Payum requise : 0 gateway(s) standard, 0 gateway(s) personnalisee(s) '
+            'Migration optionnelle vers les Payment Requests : 0 gateway(s) standard, 0 gateway(s) personnalisee(s) '
             . 'et 2 autre(s) fichier(s) PHP dependant de Payum',
             $globalIssues[0]->getMessage(),
         );

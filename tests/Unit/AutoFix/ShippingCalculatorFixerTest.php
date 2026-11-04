@@ -13,93 +13,80 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
 /**
- * Tests unitaires pour le fixer de ShippingCalculator.
+ * Tests du renommage des references aux services de calcul des frais de port.
  */
 final class ShippingCalculatorFixerTest extends TestCase
 {
+    private const FILE = 'config/services.yaml';
+
     private ShippingCalculatorFixer $fixer;
     private string $tempDir;
 
     protected function setUp(): void
     {
         $this->fixer = new ShippingCalculatorFixer();
-        $this->tempDir = sys_get_temp_dir() . '/shipping-calculator-fixer-test-' . uniqid();
-        mkdir($this->tempDir . '/src/Shipping', 0755, true);
+        $this->tempDir = sys_get_temp_dir() . '/shipping-calculator-fixer-' . uniqid('', true);
+        mkdir($this->tempDir . '/config', 0755, true);
     }
 
     protected function tearDown(): void
     {
-        $this->removeDir($this->tempDir);
+        if (is_file($this->tempDir . '/' . self::FILE)) {
+            unlink($this->tempDir . '/' . self::FILE);
+        }
+        rmdir($this->tempDir . '/config');
+        rmdir($this->tempDir);
     }
 
-    private function removeDir(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $items = scandir($dir);
-        if ($items === false) {
-            return;
-        }
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $item;
-            is_dir($path) ? $this->removeDir($path) : unlink($path);
-        }
-        rmdir($dir);
-    }
-
-    private function createIssue(string $file): MigrationIssue
+    private function issue(string $analyzer = 'Shipping Calculator', string $file = self::FILE): MigrationIssue
     {
         return new MigrationIssue(
-            severity: Severity::WARNING,
+            severity: Severity::BREAKING,
             category: Category::DEPRECATION,
-            analyzer: 'Shipping Calculator',
-            message: sprintf('Reference DelegatingCalculatorInterface dans %s', $file),
+            analyzer: $analyzer,
+            message: 'Service renomme',
             detail: '',
             suggestion: '',
             file: $file,
-            line: null,
-            codeSnippet: null,
-            docUrl: null,
-            estimatedMinutes: 30,
         );
     }
 
     #[Test]
-    public function testReplacesDelegatingCalculatorInterface(): void
+    public function testRenamesReferencesButKeepsTheUnchangedTag(): void
     {
-        $file = 'src/Shipping/CustomCalculator.php';
-        $filePath = $this->tempDir . '/' . $file;
-        file_put_contents($filePath, "<?php\n\nuse Sylius\Component\Shipping\Calculator\DelegatingCalculatorInterface;\n\nclass CustomCalculator implements DelegatingCalculatorInterface\n{\n}\n");
+        file_put_contents($this->tempDir . '/' . self::FILE, <<<'YAML'
+services:
+    App\Shipping\WeightCalculator:
+        arguments: ['@sylius.shipping_calculator.per_unit_rate']
+        tags:
+            - { name: sylius.shipping_calculator, calculator: weight }
+    App\Shipping\LoggingCalculator:
+        decorates: sylius.shipping_calculator
+        arguments: ['@.inner']
+YAML);
 
-        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
+        $fix = $this->fixer->fix($this->issue(), $this->tempDir);
 
         self::assertNotNull($fix);
-        self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
-        self::assertStringContainsString('CalculatorInterface', $fix->fixedContent);
-        self::assertStringNotContainsString('DelegatingCalculatorInterface', $fix->fixedContent);
+        self::assertSame(FixConfidence::HIGH, $fix->confidence);
+        self::assertStringContainsString("['@sylius.calculator.shipping.per_unit_rate']", $fix->fixedContent);
+        self::assertStringContainsString('decorates: sylius.calculator.shipping', $fix->fixedContent);
+        self::assertStringContainsString('{ name: sylius.shipping_calculator, calculator: weight }', $fix->fixedContent);
     }
 
     #[Test]
-    public function testReturnsNullWhenNoDelegatingReference(): void
+    public function testReturnsNullWhenOnlyTheTagIsUsed(): void
     {
-        $file = 'src/Shipping/ModernCalculator.php';
-        $filePath = $this->tempDir . '/' . $file;
-        file_put_contents($filePath, "<?php\n\nuse Sylius\Component\Shipping\Calculator\CalculatorInterface;\n\nclass ModernCalculator implements CalculatorInterface\n{\n}\n");
+        file_put_contents($this->tempDir . '/' . self::FILE, "services:\n    App\\Shipping\\WeightCalculator:\n        tags: [{ name: sylius.shipping_calculator, calculator: weight }]\n");
 
-        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
-
-        self::assertNull($fix);
+        self::assertNull($this->fixer->fix($this->issue(), $this->tempDir));
     }
 
     #[Test]
-    public function testSupportsPhpAndYamlFiles(): void
+    public function testSupportsOnlyYamlFilesOfItsAnalyzer(): void
     {
-        self::assertTrue($this->fixer->supports($this->createIssue('src/Calculator.php')));
-        self::assertTrue($this->fixer->supports($this->createIssue('config/services.yaml')));
-        self::assertFalse($this->fixer->supports($this->createIssue('templates/calc.html.twig')));
+        self::assertTrue($this->fixer->supports($this->issue()));
+        self::assertFalse($this->fixer->supports($this->issue(file: 'src/Shipping/WeightCalculator.php')));
+        self::assertFalse($this->fixer->supports($this->issue('Service Decorator')));
     }
 }

@@ -6,7 +6,9 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\SyliusVersionDetector;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixConfidence;
 use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\FixEngine;
+use PierreArthur\SyliusUpgradeAnalyzer\AutoFix\MigrationFix;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Exception\ProjectNotFoundException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -115,6 +117,13 @@ final class AnalyzeCommand extends Command
                 'Simuler les corrections sans modifier les fichiers',
             )
             ->addOption(
+                'min-confidence',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Niveau de confiance minimal des correctifs proposés : high, medium ou low',
+                'low',
+            )
+            ->addOption(
                 'save-baseline',
                 null,
                 InputOption::VALUE_NONE,
@@ -177,6 +186,14 @@ final class AnalyzeCommand extends Command
         $dailyRate = $this->parseDailyRate($input->getOption('tjm'));
         if ($dailyRate === false) {
             $io->error('L\'option --tjm attend un nombre entier strictement positif (ex : --tjm=600).');
+
+            return Command::FAILURE;
+        }
+
+        /* Validé avant l'analyse : une faute de frappe ne doit pas faire appliquer plus de correctifs que prévu */
+        $minConfidence = FixConfidence::tryFrom(strtolower((string) $input->getOption('min-confidence')));
+        if ($minConfidence === null) {
+            $io->error('L\'option --min-confidence attend high, medium ou low.');
 
             return Command::FAILURE;
         }
@@ -268,7 +285,7 @@ final class AnalyzeCommand extends Command
         /* Application des correctifs automatiques si demandé */
         $wantsFix = $input->getOption('fix') || $input->getOption('dry-run');
         if ($wantsFix && $this->fixEngine !== null) {
-            $this->runFixEngine($report, $projectPath, $input, $io);
+            $this->runFixEngine($report, $projectPath, $minConfidence, $input, $io);
         }
 
         /* Code de sortie : 1 si des problèmes BREAKING existent, 0 sinon */
@@ -353,18 +370,30 @@ final class AnalyzeCommand extends Command
     /**
      * Exécute le moteur de correctifs automatiques sur le rapport.
      * En mode --dry-run, affiche les correctifs sans les appliquer.
-     * En mode --fix, applique les correctifs après confirmation.
+     * En mode --fix, affiche le patch puis applique les correctifs après confirmation.
+     * Seuls les correctifs au moins aussi fiables que $minConfidence sont proposés.
      */
-    private function runFixEngine(MigrationReport $report, string $projectPath, InputInterface $input, SymfonyStyle $io): void
-    {
+    private function runFixEngine(
+        MigrationReport $report,
+        string $projectPath,
+        FixConfidence $minConfidence,
+        InputInterface $input,
+        SymfonyStyle $io,
+    ): void {
         if ($this->fixEngine === null) {
             return;
         }
 
-        $fixes = $this->fixEngine->generateFixes($report, $projectPath);
+        $allFixes = $this->fixEngine->generateFixes($report, $projectPath);
+        $fixes = array_values(array_filter(
+            $allFixes,
+            static fn (MigrationFix $fix): bool => self::confidenceRank($fix->confidence) >= self::confidenceRank($minConfidence),
+        ));
 
         if ($fixes === []) {
-            $io->text('Aucun correctif automatique disponible pour les issues détectées.');
+            $io->text($allFixes === []
+                ? 'Aucun correctif automatique disponible pour les issues détectées.'
+                : sprintf('Aucun correctif de confiance %s ou supérieure (%d écarté(s)).', $minConfidence->value, count($allFixes)));
 
             return;
         }
@@ -394,15 +423,22 @@ final class AnalyzeCommand extends Command
             return;
         }
 
-        /* Mode fix : en terminal interactif, rien n'est écrit sans accord explicite. En CI
-           (sans terminal ou avec --no-interaction), le comportement reste celui attendu par les scripts. */
+        /* Mode fix : en terminal interactif, le patch complet est montré et rien n'est écrit sans
+           accord explicite. En CI (sans terminal ou avec --no-interaction), le comportement reste
+           celui attendu par les scripts. */
         $io->newLine();
-        if ($input->isInteractive()
-            && !$io->confirm(sprintf('Appliquer ces %d correctif(s) aux fichiers du projet ?', count($fixes)), false)
-        ) {
-            $io->text('<comment>Aucune modification appliquée. Utilisez --dry-run pour voir le patch.</comment>');
+        if ($input->isInteractive()) {
+            $patch = $this->fixEngine->generatePatch($fixes);
+            if ($patch !== '') {
+                $io->text($patch);
+                $io->newLine();
+            }
 
-            return;
+            if (!$io->confirm(sprintf('Appliquer ces %d correctif(s) aux fichiers du projet ?', count($fixes)), false)) {
+                $io->text('<comment>Aucune modification appliquée.</comment>');
+
+                return;
+            }
         }
 
         $applied = 0;
@@ -413,6 +449,18 @@ final class AnalyzeCommand extends Command
         }
 
         $io->success(sprintf('%d correctif(s) appliqué(s).', $applied));
+    }
+
+    /**
+     * Ordonne les niveaux de confiance pour comparer un correctif au seuil demandé.
+     */
+    private static function confidenceRank(FixConfidence $confidence): int
+    {
+        return match ($confidence) {
+            FixConfidence::LOW => 0,
+            FixConfidence::MEDIUM => 1,
+            FixConfidence::HIGH => 2,
+        };
     }
 
     /**

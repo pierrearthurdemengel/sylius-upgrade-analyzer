@@ -88,17 +88,18 @@ final class BehatContextDeprecationAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie la detection d'un contexte Behat deprecie dans behat.yml.
+     * Verifie la detection du service sylius.behat.api_security, supprime en Sylius 2.0,
+     * dans la declaration des contextes du projet.
      */
     #[Test]
-    public function testDetectsDeprecatedBehatContext(): void
+    public function testDetectsRemovedApiSecurityService(): void
     {
-        file_put_contents($this->tempDir . '/behat.yml', <<<'YAML'
-default:
-    suites:
-        ui:
-            contexts:
-                - sylius.behat.context.hook.calendar
+        mkdir($this->tempDir . '/config', 0755, true);
+        file_put_contents($this->tempDir . '/config/services_test.yaml', <<<'YAML'
+services:
+    App\Tests\Behat\Context\Api\Admin\ManagingGiftCardsContext:
+        arguments:
+            - '@sylius.behat.api_security'
 YAML);
 
         $analyzer = new BehatContextDeprecationAnalyzer();
@@ -106,11 +107,35 @@ YAML);
 
         $analyzer->analyze($report);
 
-        $contextIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => str_contains($issue->getMessage(), 'sylius.behat.context.hook.calendar'),
-        );
-        self::assertNotEmpty($contextIssues);
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+        self::assertContains('Service Behat supprime "sylius.behat.api_security" dans services_test.yaml', $messages);
+    }
+
+    /**
+     * Verifie que les contextes toujours presents en Sylius 2.0 (calendar, doctrine_orm,
+     * managing_orders, checkout) ne sont pas signales.
+     */
+    #[Test]
+    public function testIgnoresContextsStillShippedWithSylius2(): void
+    {
+        file_put_contents($this->tempDir . '/behat.yml', <<<'YAML'
+default:
+    suites:
+        ui:
+            contexts:
+                - sylius.behat.context.hook.calendar
+                - sylius.behat.context.hook.doctrine_orm
+                - sylius.behat.context.setup.calendar
+                - sylius.behat.context.ui.admin.managing_orders
+                - sylius.behat.context.ui.shop.checkout
+YAML);
+
+        $analyzer = new BehatContextDeprecationAnalyzer();
+        $report = $this->createReport();
+
+        $analyzer->analyze($report);
+
+        self::assertSame([], $report->getIssues());
     }
 
     /**
@@ -122,9 +147,10 @@ YAML);
         file_put_contents($this->tempDir . '/behat.yml', <<<'YAML'
 default:
     suites:
-        ui:
+        api:
             contexts:
-                - sylius.behat.context.hook.calendar
+                - App\Tests\Behat\Context\Api\ShopContext:
+                    security: '@sylius.behat.api_security'
 YAML);
 
         $analyzer = new BehatContextDeprecationAnalyzer();
@@ -132,6 +158,7 @@ YAML);
 
         $analyzer->analyze($report);
 
+        self::assertNotEmpty($report->getIssues());
         foreach ($report->getIssues() as $issue) {
             self::assertSame(Severity::WARNING, $issue->getSeverity());
         }

@@ -23,7 +23,7 @@ This document describes every built-in analyzer included in Sylius Upgrade Analy
 15. [Deprecated Email Manager](#15-deprecated-email-manager)
 16. [Removed Payment Gateway](#16-removed-payment-gateway)
 17. [Service Decorator](#17-service-decorator)
-18. [Order Processor Priority](#18-order-processor-priority)
+18. [Order Processor Autoconfiguration](#18-order-processor-autoconfiguration)
 19. [Removed Form Type Extension](#19-removed-form-type-extension)
 20. [Behat Context Deprecation](#20-behat-context-deprecation)
 21. [Admin Menu Event](#21-admin-menu-event)
@@ -157,24 +157,26 @@ SwiftMailer is abandoned and replaced by Symfony Mailer.
 
 **Class:** `PayumAnalyzer`
 **Category:** Deprecation
-**Severity:** BREAKING
+**Severity:** SUGGESTION
 
 ### What it detects
 
-- `payum/core` and `payum/payum-bundle` dependencies in `composer.json`
 - Gateway definitions under `payum.gateways:` in YAML configuration
-- PHP classes extending `GatewayFactory` or importing `Payum\` namespace
+- PHP classes extending `GatewayFactory` or importing the `Payum\` namespace
 
-Sylius 2.0 introduces a new Payment Requests system that replaces Payum entirely.
+Sylius 2.0 still ships Payum: `payum/payum-bundle` is required by `sylius/sylius` and `SyliusPayumBundle` is maintained, so existing gateways keep working. Payment Requests are a new, optional system. These findings are suggestions and are **not counted** in the total effort; the changes that are required (Stripe Checkout and PayPal Express gateways removed, routing and configuration imports moved to `SyliusPayumBundle`, renamed services) are reported by the dedicated analyzers.
 
 ### Estimation formula
 
+Shown for information, if you choose to adopt Payment Requests:
+
 - **120 minutes per standard gateway** (defined in YAML only)
 - **480 minutes per custom gateway** (PHP class extending GatewayFactory)
+- **120 minutes per other PHP file depending on Payum**
 
 ### Documentation
 
-- [Sylius Payment Requests](https://docs.sylius.com/migration-2.0/payment-requests)
+- [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md) (packages configuration and removed packages)
 
 ---
 
@@ -374,21 +376,19 @@ Per-file basis, typically 15-30 minutes per affected file.
 
 **Class:** `CommandHandlerRenameAnalyzer`
 **Category:** Deprecation
-**Severity:** WARNING
+**Severity:** BREAKING
 
 ### What it detects
 
-- Existence of `src/Message/` directory (should be renamed to `src/Command/`)
-- PHP files with `App\Message\` namespace that need updating
-- Handler classes following the old naming convention
+References in `src/` to classes of the `Message`, `MessageHandler` and `MessageDispatcher` namespaces of `AdminBundle` and `CoreBundle`, renamed `Command`, `CommandHandler` and `CommandDispatcher` in Sylius 2.0 (for example `Sylius\Bundle\CoreBundle\Message\ResendOrderConfirmationEmail`). The 18 classes concerned keep their short name.
 
-### Estimation formula
+Your own `src/Message/` directory and `*MessageHandler` classes are not affected by the upgrade and are not reported.
 
-Per-file basis. Includes namespace updates and file moves. Typically 15 minutes per file.
+### Estimation: 15 minutes per reference
 
 ### Documentation
 
-- [Sylius 2.0 Upgrade Guide](https://docs.sylius.com/en/latest/book/upgrading.html)
+- [UPGRADE-2.0.md, Architecture changes](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md#architecture-changes)
 
 ---
 
@@ -457,24 +457,23 @@ Per-decorator basis, typically 60 minutes per affected service decorator.
 
 ---
 
-## 18. Order Processor Priority
+## 18. Order Processor Autoconfiguration
 
-**Class:** `OrderProcessorPriorityAnalyzer`
+**Class:** `OrderProcessorAutoconfigurationAnalyzer`
 **Category:** Deprecation
-**Severity:** WARNING
+**Severity:** BREAKING
 
 ### What it detects
 
-- Order processor services with explicit priority tags
-- Priority values that conflict with the new default ordering in Sylius 2.x
+Concrete classes implementing `OrderProcessorInterface` or `CartContextInterface` that have neither the `#[AsOrderProcessor]` / `#[AsCartContext]` attribute nor an explicit `sylius.order_processor` / `sylius.context.cart` tag (YAML, XML or `_instanceof`).
 
-### Estimation formula
+In Sylius 1.x (with the default `autoconfigure_with_attributes: false`), these classes are tagged automatically through their interface. Sylius 2.0 removes interface-based autoconfiguration: without an attribute or a tag, the processor or cart context is silently no longer called, and order totals or the cart become wrong. The order processor priorities themselves are identical in 1.14 and 2.0.
 
-Per-processor basis, typically 30-60 minutes per affected order processor.
+### Estimation: 30 minutes per class
 
 ### Documentation
 
-- [Sylius Order Processing](https://docs.sylius.com/en/latest/the-book/orders/orders.html)
+- [UPGRADE-2.0.md, Autoconfiguration](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md#autoconfiguration)
 
 ---
 
@@ -507,18 +506,15 @@ Per-processor basis, typically 30-60 minutes per affected order processor.
 
 ### What it detects
 
-- Behat context classes extending deprecated Sylius contexts
-- Step definitions using deprecated Sylius Behat steps
-- Feature files referencing deprecated context configurations
-- Files in `features/` directory using old Sylius Behat patterns
+References to the `sylius.behat.api_security` service, removed in Sylius 2.0 and split into `sylius.behat.api_admin_security` and `sylius.behat.api_shop_security`, in `behat.yml`, `features/`, `tests/` and `config/` (YAML and XML).
 
-### Estimation formula
+The `calendar`, `doctrine_orm`, `managing_orders` and `checkout` contexts still exist in Sylius 2.0 and are not reported.
 
-Per-context and per-feature file. Typically 30-60 minutes per affected Behat context.
+### Estimation: 60 minutes per reference
 
 ### Documentation
 
-- [Sylius BDD Guide](https://docs.sylius.com/en/latest/bdd/index.html)
+- [UPGRADE-2.0.md, Testing Suite](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md)
 
 ---
 
@@ -530,17 +526,21 @@ Per-context and per-feature file. Typically 30-60 minutes per affected Behat con
 
 ### What it detects
 
-- Event subscribers/listeners for `sylius.menu.admin.main` events
-- PHP classes using `Sylius\Bundle\UiBundle\Menu\Event\MenuBuilderEvent`
-- Deprecated menu builder service registrations
+Listeners and subscribers (`#[AsEventListener]` or `getSubscribedEvents()`) on the events of the five admin menu builders removed in Sylius 2.0:
 
-### Estimation formula
+- `sylius.menu.admin.customer.show`
+- `sylius.menu.admin.order.show`
+- `sylius.menu.admin.product.form`
+- `sylius.menu.admin.product_variant.form`
+- `sylius.menu.admin.promotion.update`
 
-Per-subscriber basis, typically 60 minutes per affected menu customization.
+These events are no longer dispatched; the menu entries they added must move to the Twig Hooks of the pages. The main menu (`sylius.menu.admin.main`) and the shop account menu are unchanged and are not reported.
+
+### Estimation: 120 minutes per handler
 
 ### Documentation
 
-- [Sylius Admin Customization](https://docs.sylius.com/en/latest/customization/menu.html)
+- [UPGRADE-2.0.md, removed services](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md)
 
 ---
 
@@ -570,21 +570,23 @@ Per-checker basis, typically 120 minutes per custom promotion rule checker.
 
 **Class:** `ShippingCalculatorAnalyzer`
 **Category:** Deprecation
-**Severity:** WARNING
+**Severity:** BREAKING
 
 ### What it detects
 
-- Classes implementing deprecated shipping calculator interfaces
-- Custom shipping calculators using the old API
-- Configuration referencing deprecated calculator service IDs
+References in `config/` to the core shipping calculator services renamed in Sylius 2.0, as an argument (`@id`), a `decorates` target or an alias:
 
-### Estimation formula
+- `sylius.shipping_calculator` → `sylius.calculator.shipping`
+- `sylius.shipping_calculator.flat_rate` → `sylius.calculator.shipping.flat_rate`
+- `sylius.shipping_calculator.per_unit_rate` → `sylius.calculator.shipping.per_unit_rate`
 
-Per-calculator basis, typically 120 minutes per custom shipping calculator.
+`CalculatorInterface`, `DelegatingCalculatorInterface`, the `sylius.shipping_calculator` tag and `#[AsShippingCalculator]` are identical in 1.14 and 2.0: custom calculators keep working and are not reported.
+
+### Estimation: 15 minutes per reference
 
 ### Documentation
 
-- [Sylius Shipping](https://docs.sylius.com/en/latest/the-book/shipping/shipping.html)
+- [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md)
 
 ---
 
@@ -744,9 +746,11 @@ Per-fixture basis, typically 60 minutes per custom fixture class.
 
 ### What it detects
 
-21 renamed or removed Sylius service IDs in YAML config files, including:
+Renamed or removed Sylius service IDs in YAML config files, each taken word for word from the `UPGRADE-2.0.md` tables, including:
 - `sylius.zone_matcher` → `sylius.matcher.zone`
 - `sylius.province_naming_provider` → `sylius.provider.province_naming`
+- `sylius.controller.admin.dashboard` → `sylius_admin.controller.dashboard`
+- `sylius.controller.shop.contact` → `sylius_shop.controller.contact` (and the currency switch, locale switch and register thank-you controllers)
 - `sylius.form_registry.payum_gateway_config` → `sylius.form_registry.payment_gateway_config`
 - Removed: `sylius.security.password_hasher`, `sylius.controller.payum`, etc.
 

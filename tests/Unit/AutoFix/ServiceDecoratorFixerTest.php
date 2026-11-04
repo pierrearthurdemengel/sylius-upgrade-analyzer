@@ -69,30 +69,50 @@ final class ServiceDecoratorFixerTest extends TestCase
     }
 
     #[Test]
-    public function testReplacesAdminControllerPrefix(): void
+    public function testReplacesDocumentedAdminController(): void
     {
         $file = 'config/services.yaml';
         $filePath = $this->tempDir . '/' . $file;
-        file_put_contents($filePath, "services:\n    App\Controller\ProductController:\n        decorates: sylius.controller.admin.product\n");
+        file_put_contents($filePath, "services:
+    App\Controller\DashboardController:
+        decorates: sylius.controller.admin.dashboard
+");
 
         $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
 
         self::assertNotNull($fix);
         self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
-        self::assertStringContainsString('decorates: sylius_admin.controller.product', $fix->fixedContent);
+        self::assertStringContainsString('decorates: sylius_admin.controller.dashboard', $fix->fixedContent);
     }
 
     #[Test]
-    public function testReplacesShopControllerPrefixQuoted(): void
+    public function testReplacesDocumentedShopControllerQuoted(): void
     {
         $file = 'config/services.yaml';
         $filePath = $this->tempDir . '/' . $file;
-        file_put_contents($filePath, "services:\n    App\Controller\CartController:\n        decorates: 'sylius.controller.shop.cart'\n");
+        file_put_contents($filePath, "services:
+    App\Controller\ContactController:
+        decorates: 'sylius.controller.shop.contact'
+");
 
         $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
 
         self::assertNotNull($fix);
-        self::assertStringContainsString("decorates: 'sylius_shop.controller.cart'", $fix->fixedContent);
+        self::assertStringContainsString("decorates: 'sylius_shop.controller.contact'", $fix->fixedContent);
+    }
+
+    #[Test]
+    public function testLeavesUndocumentedControllersUntouched(): void
+    {
+        /* sylius.controller.shop.cart n'est pas renomme dans UPGRADE-2.0.md : aucun nom invente */
+        $file = 'config/services.yaml';
+        $filePath = $this->tempDir . '/' . $file;
+        file_put_contents($filePath, "services:
+    App\Controller\CartController:
+        decorates: 'sylius.controller.shop.cart'
+");
+
+        self::assertNull($this->fixer->fix($this->createIssue($file), $this->tempDir));
     }
 
     #[Test]

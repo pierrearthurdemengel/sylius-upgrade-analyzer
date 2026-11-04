@@ -78,8 +78,8 @@ final class PaymentRequestEnvFixerTest extends TestCase
 
         self::assertNotNull($fix);
         self::assertSame(FixConfidence::HIGH, $fix->confidence);
-        self::assertStringContainsString('SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN=doctrine://default', $fix->fixedContent);
-        self::assertStringContainsString('SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN=doctrine://default?queue_name=payment_request_failed', $fix->fixedContent);
+        self::assertStringContainsString('SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN=sync://', $fix->fixedContent);
+        self::assertStringContainsString('SYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN=sync://', $fix->fixedContent);
         self::assertStringContainsString('###> sylius/payment-request ###', $fix->fixedContent);
     }
 
@@ -87,7 +87,7 @@ final class PaymentRequestEnvFixerTest extends TestCase
     public function testReturnsNullWhenVarsAlreadyPresent(): void
     {
         $filePath = $this->tempDir . '/.env';
-        file_put_contents($filePath, "APP_ENV=dev\nSYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN=doctrine://default\nSYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN=doctrine://default?queue_name=payment_request_failed\n");
+        file_put_contents($filePath, "APP_ENV=dev\nSYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_DSN=sync://\nSYLIUS_MESSENGER_TRANSPORT_PAYMENT_REQUEST_FAILED_DSN=sync://\n");
 
         $fix = $this->fixer->fix($this->createIssue('.env'), $this->tempDir);
 
