@@ -1,9 +1,10 @@
 # Sylius Upgrade Analyzer
 
 [![Packagist Version](https://img.shields.io/packagist/v/pierre-arthur/sylius-upgrade-analyzer)](https://packagist.org/packages/pierre-arthur/sylius-upgrade-analyzer)
-[![PHP Version](https://img.shields.io/packagist/php-v/pierre-arthur/sylius-upgrade-analyzer)](https://packagist.org/packages/pierre-arthur/sylius-upgrade-analyzer)
-[![Symfony Version](https://img.shields.io/badge/symfony-6.4%20%7C%207.2-blue)](https://symfony.com)
+[![Analyzes Sylius](https://img.shields.io/badge/analyzes-Sylius%201.0%20%E2%86%92%201.14%20LTS-1a7f5a)](#compatibility)
+[![Any project PHP version](https://img.shields.io/badge/project%20PHP-any%20version%20(Docker)-blue)](#installation)
 [![CI](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer/actions/workflows/ci.yaml/badge.svg)](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer/actions/workflows/ci.yaml)
+[![Coverage](https://img.shields.io/badge/line%20coverage-%E2%89%A580%25%20enforced-1a7f5a)](#quality-and-safety)
 [![License](https://img.shields.io/packagist/l/pierre-arthur/sylius-upgrade-analyzer)](LICENSE)
 
 **Automated migration audit & auto-fix CLI for Sylius 1.x to 2.x projects.**
@@ -11,6 +12,14 @@
 Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every** breaking change, deprecated API, and incompatible pattern, then produces a detailed migration report with time estimates, fix suggestions, and **41 automatic corrections** covering the most common migration tasks.
 
 Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md), [UPGRADE-API-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/UPGRADE-API-2.0.md), and [CHANGELOG-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/CHANGELOG-2.0.md). Nothing is left unchecked.
+
+## Compatibility
+
+**Supports every Sylius 1.x release, from 1.0 to 1.14 LTS (the final 1.x version).** There is no Sylius 1.15 or 1.16: 1.14 is the last release of the 1.x branch. The default migration target is Sylius 2.2.
+
+**Works whatever your project's PHP version.** The Docker image ships its own PHP, so a Sylius 1.x shop still running PHP 7.4 or Symfony 5.4 can be audited without installing anything in the project (see [Installation](#installation)).
+
+> **Sylius 1.14 LTS security support ends in December 2026.** Maintenance already ended in December 2025; after the end of support, 1.x shops no longer receive security fixes ([official release cycle](https://docs.sylius.com/public/open-source/release-cycle)). Auditing now is the first step to plan the move to Sylius 2.
 
 ---
 
@@ -170,11 +179,43 @@ Run the analyzer in your CI pipeline, post PR comments, and upload SARIF to GitH
 
 ## Installation
 
+Pick the mode that fits your project. The first three never touch your project's `composer.json`.
+
+### Docker (recommended for Sylius 1.x projects)
+
+Works whatever your project's PHP version, all formats included (PDF too):
+
+```bash
+docker run --rm -v "$PWD:/project" ghcr.io/pierrearthurdemengel/sylius-upgrade-analyzer
+
+# Any command and option, reports written next to your code
+docker run --rm -v "$PWD:/project" --user "$(id -u):$(id -g)" ghcr.io/pierrearthurdemengel/sylius-upgrade-analyzer \
+  sylius-upgrade:analyze /project --format=pdf --output=/project/report.pdf --tjm=600
+```
+
+### Standalone PHAR
+
+A single file, no dependency to install. Needs PHP 8.2+ on the machine running it, not in the audited project. PDF output is not available from the PHAR (use Docker for PDF).
+
+```bash
+curl -LO https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer/releases/latest/download/sylius-upgrade-analyzer.phar
+php sylius-upgrade-analyzer.phar sylius-upgrade:analyze /path/to/project
+```
+
+### Global Composer install
+
+```bash
+composer global require pierre-arthur/sylius-upgrade-analyzer
+sylius-upgrade-analyzer sylius-upgrade:analyze /path/to/project
+```
+
+### Inside the project
+
+Only when the project already runs PHP 8.2+ with Symfony 6.4 or 7.x:
+
 ```bash
 composer require --dev pierre-arthur/sylius-upgrade-analyzer
 ```
-
-Requirements: PHP 8.2+, Symfony 6.4 or 7.2.
 
 ---
 
@@ -353,6 +394,13 @@ Each fix has a confidence level:
 
 In `--dry-run` mode, the tool generates a unified diff patch showing what would change without writing any files.
 
+#### What auto-fixes can and cannot do
+
+- **Nothing is written without your consent in a terminal**: `--fix` lists every change and asks for confirmation. In CI (non-interactive), `--fix` applies directly, as scripts expect. Run `--dry-run` first to review the patch.
+- **Files only**: no fixer connects to a database, runs a migration or executes a command. Every write goes through a single place (`FixEngine::applyFix()`), so every change is visible in your Git diff.
+- **Payment configuration is handled conservatively**: no fixer edits PHP payment code. Two `MEDIUM` fixers only comment out (never delete) obsolete Payum and removed-gateway YAML, and one adds the missing Payment Request environment variables to `.env`.
+- Run it on a clean Git working tree so that `git diff` and `git checkout .` remain your safety net.
+
 ---
 
 ## GitHub Action
@@ -523,6 +571,32 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:matrix
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:matrix \
   bitbag/wishlist-plugin,sylius/invoicing-plugin --format=markdown
 ```
+
+---
+
+## Results on Public Projects
+
+The analyzer is run on public Sylius 1.x code bases to check its findings against reality (details and commands in [docs/benchmarks.md](docs/benchmarks.md)):
+
+| Project | Sylius | Issues | Blocking | Estimated effort |
+|---------|--------|--------|----------|------------------|
+| [Sylius-Standard](https://github.com/Sylius/Sylius-Standard) (1.14 branch, official skeleton) | ~1.14.0 | 64 | 25 | 51.5 h |
+| [Sylius/InvoicingPlugin](https://github.com/Sylius/InvoicingPlugin) (1.0 branch) | ~1.13.0 \|\| ~1.14.0 | 30 | 6 | 38.5 h |
+| [BitBag SyliusWishlistPlugin](https://github.com/BitBagCommerce/SyliusWishlistPlugin) | ^1.13 \|\| ^1.14 | 17 | 2 | 18.5 h |
+
+Every blocking issue on these projects was reviewed by hand. Running these benchmarks already caught and fixed false positives (removed configuration keys, development tools reported as incompatible plugins).
+
+---
+
+## Quality and Safety
+
+- **Tests**: 890+ PHPUnit tests, line coverage of at least 80 % enforced in CI (the build fails below), PHPStan level 8, PHP CS Fixer.
+- **CI matrix**: PHP 8.2, 8.3 and 8.4, against Symfony 6.4 and 7.4, dependencies installed from `composer.lock`, `composer audit` in every job.
+- **Every detection is sourced**: checks are traced back to the official Sylius upgrade guides; checks that could not be traced back to a documented change have been removed (see [CHANGELOG.md](CHANGELOG.md)).
+- **Semantic versioning** and a maintained [CHANGELOG.md](CHANGELOG.md). Security issues: see [SECURITY.md](SECURITY.md).
+- **Privacy**: the analysis runs entirely on your machine; your code is never uploaded. The only network calls are optional plugin compatibility checks against the Sylius Addons Marketplace and Packagist (`--no-marketplace` disables them).
+
+If the tool saved you time, a star on GitHub or a review on the [Sylius Addons Marketplace](https://addons.sylius.com/en_US/products/sylius-upgrade-analyzer) helps other teams find it.
 
 ---
 
