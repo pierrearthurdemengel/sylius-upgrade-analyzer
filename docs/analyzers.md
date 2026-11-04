@@ -1002,6 +1002,8 @@ The PHP version declared by the project, compared with the first patched release
 - PHP images in compose files, including FrankenPHP tags such as `dunglas/frankenphp:1.4-php8.3`
 - `config.platform.php` in `composer.json`, `.php-version`, `.tool-versions`
 
-A precise version below the fix, or a branch without security support (8.1 and older), is BREAKING. A declaration without patch level (`php:8.3-fpm`) is a SUGGESTION to verify the deployed version: the tool cannot see the production runtime.
+Only a Docker image pinned to a patch release (`php:8.3.10-fpm`) describes the PHP that actually runs: below the fix, or on a branch without security support (8.1 and older), it is BREAKING. Every other declaration is a SUGGESTION to verify the deployed version with `php -v`, never a blocking alert: `config.platform.php` often sets a minimum for dependency resolution, `.php-version` and `.tool-versions` describe the developer machine, a floating tag (`php:8.3-fpm`) may already be patched, and distribution packages receive fixes without changing their version number.
+
+Each issue cites both CVE identifiers with the official advisories of the PHP team ([GHSA-w8hw-w9fx-j79w](https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w), [GHSA-6wmf-4rv5-p3rp](https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp)) and their listing in the CISA Known Exploited Vulnerabilities catalog (26/10/2026).
 
 ### Estimation: 60 minutes per vulnerable runtime, 15 minutes per runtime to verify
