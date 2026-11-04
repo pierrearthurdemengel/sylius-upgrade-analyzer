@@ -52,7 +52,7 @@ final class AnalyzeCommandFixConfirmationTest extends TestCase
         rmdir($this->projectDir);
     }
 
-    private function createTester(): CommandTester
+    private function createTester(FixConfidence $confidence = FixConfidence::HIGH): CommandTester
     {
         $configFile = $this->configFile;
 
@@ -85,7 +85,11 @@ final class AnalyzeCommandFixConfirmationTest extends TestCase
             }
         };
 
-        $fixer = new class () implements AutoFixInterface {
+        $fixer = new class ($confidence) implements AutoFixInterface {
+            public function __construct(private readonly FixConfidence $confidence)
+            {
+            }
+
             public function getName(): string
             {
                 return 'SwiftMailer Fixer';
@@ -99,7 +103,7 @@ final class AnalyzeCommandFixConfirmationTest extends TestCase
             public function fix(MigrationIssue $issue, string $projectPath): ?MigrationFix
             {
                 return new MigrationFix(
-                    confidence: FixConfidence::HIGH,
+                    confidence: $this->confidence,
                     filePath: (string) $issue->getFile(),
                     originalContent: AnalyzeCommandFixConfirmationTest::originalContent(),
                     fixedContent: AnalyzeCommandFixConfirmationTest::fixedContent(),
@@ -132,6 +136,65 @@ final class AnalyzeCommandFixConfirmationTest extends TestCase
 
         self::assertSame(self::ORIGINAL, file_get_contents($this->configFile));
         self::assertStringContainsString('Aucune modification appliquée', $tester->getDisplay());
+    }
+
+    /** Verifie que le patch complet est affiche avant la question de confirmation. */
+    #[Test]
+    public function testShowsPatchBeforeAskingForConfirmation(): void
+    {
+        $tester = $this->createTester();
+        $tester->setInputs(['no']);
+
+        $tester->execute(['project-path' => $this->projectDir, '--fix' => true, '--no-promo' => true], ['interactive' => true]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('+    mailer:', $display);
+        self::assertLessThan(strpos($display, 'Appliquer ces 1 correctif(s)'), strpos($display, '+    mailer:'));
+    }
+
+    /** Verifie que --min-confidence ecarte les correctifs moins fiables que le seuil. */
+    #[Test]
+    public function testSkipsFixesBelowMinimumConfidence(): void
+    {
+        $tester = $this->createTester(FixConfidence::MEDIUM);
+
+        $tester->execute(
+            ['project-path' => $this->projectDir, '--fix' => true, '--min-confidence' => 'high', '--no-promo' => true],
+            ['interactive' => false],
+        );
+
+        self::assertSame(self::ORIGINAL, file_get_contents($this->configFile));
+        self::assertStringContainsString('Aucun correctif de confiance high ou supérieure (1 écarté(s))', $tester->getDisplay());
+    }
+
+    /** Verifie qu'un correctif au niveau du seuil reste applique. */
+    #[Test]
+    public function testAppliesFixesAtMinimumConfidence(): void
+    {
+        $tester = $this->createTester(FixConfidence::MEDIUM);
+
+        $tester->execute(
+            ['project-path' => $this->projectDir, '--fix' => true, '--min-confidence' => 'medium', '--no-promo' => true],
+            ['interactive' => false],
+        );
+
+        self::assertSame(self::FIXED, file_get_contents($this->configFile));
+    }
+
+    /** Verifie qu'une valeur inconnue de --min-confidence est refusee avant toute analyse. */
+    #[Test]
+    public function testRejectsUnknownMinimumConfidence(): void
+    {
+        $tester = $this->createTester();
+
+        $code = $tester->execute(
+            ['project-path' => $this->projectDir, '--fix' => true, '--min-confidence' => 'safe', '--no-promo' => true],
+            ['interactive' => false],
+        );
+
+        self::assertSame(1, $code);
+        self::assertSame(self::ORIGINAL, file_get_contents($this->configFile));
+        self::assertStringContainsString('--min-confidence attend high, medium ou low', $tester->getDisplay());
     }
 
     /** Verifie qu'une confirmation en terminal interactif applique les correctifs. */
