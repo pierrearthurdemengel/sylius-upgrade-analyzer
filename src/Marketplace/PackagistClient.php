@@ -105,6 +105,11 @@ final class PackagistClient
         $majorTarget = $this->extractMajorVersion($targetSyliusVersion);
         $compatibleVersion = null;
 
+        /* Un paquet dont aucune version ne cite le coeur de Sylius (outil de qualite, extension
+           Behat...) n'est pas contraint par la montee de version, meme publie par un editeur Sylius. */
+        $hasReadableVersion = false;
+        $mentionsSylius = false;
+
         /* Parcours des versions pour trouver une compatibilite */
         foreach ($versions as $versionName => $versionData) {
             if (!is_array($versionData) || !is_string($versionName)) {
@@ -119,6 +124,13 @@ final class PackagistClient
             $require = $versionData['require'] ?? [];
             if (!is_array($require)) {
                 continue;
+            }
+
+            $hasReadableVersion = true;
+            foreach (array_keys($require) as $depName) {
+                if (is_string($depName) && $this->isSyliusDependency($depName)) {
+                    $mentionsSylius = true;
+                }
             }
 
             /* Recherche de la dependance sylius/sylius dans les exigences */
@@ -167,6 +179,13 @@ final class PackagistClient
                 continue;
             }
 
+            $hasReadableVersion = true;
+            foreach (array_keys($require) as $depName) {
+                if (is_string($depName) && $this->isSyliusDependency($depName)) {
+                    $mentionsSylius = true;
+                }
+            }
+
             foreach ($require as $depName => $depConstraint) {
                 if (!is_string($depName) || !is_string($depConstraint)) {
                     continue;
@@ -190,6 +209,15 @@ final class PackagistClient
                     );
                 }
             }
+        }
+
+        if ($hasReadableVersion && !$mentionsSylius) {
+            return new PluginCompatibility(
+                packageName: $packageName,
+                currentVersion: '',
+                status: PluginCompatibilityStatus::COMPATIBLE,
+                notes: 'Le paquet ne depend pas du coeur de Sylius : la montee de version ne le contraint pas',
+            );
         }
 
         return new PluginCompatibility(
