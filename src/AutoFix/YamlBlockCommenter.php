@@ -25,7 +25,8 @@ final class YamlBlockCommenter
         $count = \count($lines);
 
         for ($i = 0; $i < $count; $i++) {
-            if (preg_match('/^([ \t]*)(?:' . $keyPattern . ')[ \t]*:(?:[ \t]|$)/', $lines[$i], $match) !== 1) {
+            /* \r? : les fichiers CRLF gardent un \r en fin de ligne apres le decoupage sur \n */
+            if (preg_match('/^([ \t]*)(?:' . $keyPattern . ')[ \t]*:(?:[ \t]|\r?$)/', $lines[$i], $match) !== 1) {
                 $result[] = $lines[$i];
                 continue;
             }
