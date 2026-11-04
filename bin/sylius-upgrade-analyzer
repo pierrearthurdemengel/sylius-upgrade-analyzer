@@ -128,6 +128,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\CsvReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\MarkdownReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\PdfReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ReportLoader;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\SarifReporter;
 use Symfony\Component\Console\Application;
@@ -213,6 +214,7 @@ $reporters = [
     new SarifReporter(),
     new MarkdownReporter(),
     new CsvReporter(),
+    new PdfReporter(),
 ];
 
 /* Construction du moteur de correctifs automatiques */
