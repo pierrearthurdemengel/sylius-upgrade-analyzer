@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Command;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\LicenseExpiredException;
-use PierreArthur\SyliusUpgradeAnalyzer\Exception\ServiceUnavailableException;
+use PierreArthur\SyliusUpgradeAnalyzer\Exception\PdfGenerationException;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
+use PierreArthur\SyliusUpgradeAnalyzer\Report\MultiProjectReporter;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -20,17 +18,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * Commande d'analyse multi-projets.
- * Analyse N projets Sylius indépendamment, puis envoie le tout au service
- * pour génération d'un PDF consolidé (réservé aux clés Agency).
+ * Analyse N projets Sylius indépendamment, puis produit un rapport consolidé
+ * (console, JSON, Markdown ou PDF) avec un tableau comparatif et les totaux.
  */
 #[AsCommand(
     name: 'sylius-upgrade:multi-analyze',
-    description: 'Analyse plusieurs projets Sylius et génère un rapport PDF consolidé',
+    description: 'Analyse plusieurs projets Sylius et génère un rapport consolidé',
 )]
 final class MultiAnalyzeCommand extends Command
 {
-    use ApiKeyResolverTrait;
-
     /** @var list<AnalyzerInterface> */
     private readonly array $analyzers;
 
@@ -39,8 +35,7 @@ final class MultiAnalyzeCommand extends Command
      */
     public function __construct(
         iterable $analyzers,
-        private readonly ApiClient $apiClient,
-        private readonly JsonReporter $jsonReporter,
+        private readonly MultiProjectReporter $reporter = new MultiProjectReporter(),
     ) {
         $analyzerList = [];
         foreach ($analyzers as $analyzer) {
@@ -60,23 +55,23 @@ final class MultiAnalyzeCommand extends Command
                 'Chemins vers les répertoires des projets Sylius à analyser',
             )
             ->addOption(
-                'api-key',
-                null,
+                'format',
+                'f',
                 InputOption::VALUE_REQUIRED,
-                'Clé API Agency (obligatoire)',
+                sprintf('Format du rapport consolidé (%s)', implode(', ', MultiProjectReporter::FORMATS)),
+                'console',
             )
             ->addOption(
                 'output',
                 'o',
                 InputOption::VALUE_REQUIRED,
-                'Chemin du fichier PDF de sortie',
-                'multi-migration-report.pdf',
+                'Chemin du fichier de sortie (obligatoire en pratique pour le PDF, sinon ' . MultiProjectReporter::DEFAULT_PDF_FILE . ')',
             )
             ->addOption(
                 'tjm',
                 null,
                 InputOption::VALUE_REQUIRED,
-                'Taux journalier moyen en euros (optionnel, inclus dans le rapport)',
+                'Taux journalier moyen en euros : ajoute une estimation budgétaire par projet',
             )
             ->addOption(
                 'target-version',
@@ -85,6 +80,12 @@ final class MultiAnalyzeCommand extends Command
                 'Version cible de Sylius pour la migration',
                 '2.2',
             )
+            ->addOption(
+                'no-marketplace',
+                null,
+                InputOption::VALUE_NONE,
+                'Désactiver la vérification de compatibilité via le marketplace',
+            )
         ;
     }
 
@@ -92,38 +93,49 @@ final class MultiAnalyzeCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $apiKey = $this->resolveApiKey($input);
-        if ($apiKey === '') {
-            $io->error('Clé API Agency requise. Utilisez --api-key ou définissez SYLIUS_UPGRADE_API_KEY.');
+        $format = (string) $input->getOption('format');
+        if (!in_array($format, MultiProjectReporter::FORMATS, true)) {
+            $io->error(sprintf('Format non supporté : %s (formats disponibles : %s)', $format, implode(', ', MultiProjectReporter::FORMATS)));
 
             return Command::FAILURE;
         }
 
+        $tjm = $input->getOption('tjm');
+        $dailyRate = null;
+        if (is_string($tjm) && $tjm !== '') {
+            if (!ctype_digit($tjm) || (int) $tjm <= 0) {
+                $io->error('L\'option --tjm attend un nombre entier strictement positif (ex : --tjm=600).');
+
+                return Command::FAILURE;
+            }
+            $dailyRate = (int) $tjm;
+        }
+
         /** @var list<string> $projectPaths */
         $projectPaths = $input->getArgument('project-paths');
-        $targetVersion = $input->getOption('target-version');
-        $outputPath = $input->getOption('output');
+        $targetVersion = (string) $input->getOption('target-version');
+        $outputFile = $input->getOption('output');
+        $outputFile = is_string($outputFile) && $outputFile !== '' ? $outputFile : null;
+
+        /* En sortie console brute (JSON ou Markdown sans fichier), la progression polluerait le document */
+        $progress = $format === 'console' || $outputFile !== null ? $io : null;
 
         $reports = [];
 
         foreach ($projectPaths as $path) {
             $realPath = realpath($path);
             if ($realPath === false || !is_dir($realPath)) {
-                $io->warning(sprintf('Répertoire introuvable, ignoré : %s', $path));
+                $io->getErrorStyle()->warning(sprintf('Répertoire introuvable, ignoré : %s', $path));
 
                 continue;
             }
 
-            $io->text(sprintf('Analyse de <info>%s</info>...', $realPath));
+            $progress?->text(sprintf('Analyse de <info>%s</info>...', $realPath));
 
             $report = $this->analyzeProject($realPath, $targetVersion, $io);
+            $reports[] = $report;
 
-            $reports[] = [
-                'name' => $report->getProjectName() ?? basename($realPath),
-                'report' => $this->serializeReport($report),
-            ];
-
-            $io->text(sprintf(
+            $progress?->text(sprintf(
                 '  → %d issues, %.1fh estimées',
                 count($report->getIssues()),
                 $report->getTotalEstimatedHours(),
@@ -136,39 +148,40 @@ final class MultiAnalyzeCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->newLine();
-        $io->text(sprintf('Envoi de %d rapport(s) au service...', count($reports)));
+        $progress?->newLine();
 
-        /* Construction du payload multi-projets */
-        $payload = ['reports' => $reports];
-
-        $tjm = $input->getOption('tjm');
-        if (is_string($tjm) && $tjm !== '') {
-            $payload['options'] = ['tjm' => (int) $tjm];
-        }
+        $this->disambiguateProjectNames($reports);
 
         try {
-            $result = $this->apiClient->uploadMultiReport($payload, $apiKey);
+            $this->reporter->generate($reports, $format, $output, $outputFile, $dailyRate);
+        } catch (PdfGenerationException $exception) {
+            $io->error($exception->getMessage());
 
-            $pdfUrl = $result['pdf_url'] ?? '';
-            if ($pdfUrl === '') {
-                $io->error('Le service n\'a pas retourné d\'URL de PDF.');
+            return Command::FAILURE;
+        }
 
-                return Command::FAILURE;
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Distingue les projets qui portent le même nom Composer (forks d'une même
+     * base, déclinaisons par pays...) en ajoutant le nom de leur répertoire.
+     *
+     * @param list<MigrationReport> $reports
+     */
+    private function disambiguateProjectNames(array $reports): void
+    {
+        $occurrences = [];
+        foreach ($reports as $report) {
+            $name = (string) $report->getProjectName();
+            $occurrences[$name] = ($occurrences[$name] ?? 0) + 1;
+        }
+
+        foreach ($reports as $report) {
+            $name = (string) $report->getProjectName();
+            if ($occurrences[$name] > 1) {
+                $report->setProjectName(sprintf('%s (%s)', $name, basename($report->getProjectPath())));
             }
-
-            $this->apiClient->downloadFile($pdfUrl, $outputPath);
-            $io->success(sprintf('Rapport PDF consolidé téléchargé : %s', $outputPath));
-
-            return Command::SUCCESS;
-        } catch (LicenseExpiredException $exception) {
-            $io->error(sprintf('Erreur d\'authentification : %s', $exception->getMessage()));
-
-            return Command::FAILURE;
-        } catch (ServiceUnavailableException $exception) {
-            $io->error(sprintf('Service indisponible : %s', $exception->getMessage()));
-
-            return Command::FAILURE;
         }
     }
 
@@ -196,7 +209,7 @@ final class MultiAnalyzeCommand extends Command
             try {
                 $analyzer->analyze($report);
             } catch (\Throwable $exception) {
-                $io->warning(sprintf(
+                $io->getErrorStyle()->warning(sprintf(
                     'Analyseur "%s" en erreur sur %s : %s',
                     $analyzer->getName(),
                     basename($projectPath),
@@ -208,16 +221,6 @@ final class MultiAnalyzeCommand extends Command
         $report->complete();
 
         return $report;
-    }
-
-    /**
-     * Sérialise un rapport en tableau associatif pour l'envoi API.
-     *
-     * @return array<string, mixed>
-     */
-    private function serializeReport(MigrationReport $report): array
-    {
-        return $this->jsonReporter->buildReportData($report);
     }
 
     /**

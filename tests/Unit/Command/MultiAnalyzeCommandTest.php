@@ -6,13 +6,11 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Command;
 
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SwiftMailerAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\MultiAnalyzeCommand;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Tests unitaires pour la commande d'analyse multi-projets.
@@ -33,25 +31,6 @@ final class MultiAnalyzeCommandTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed>|null $responseData
-     */
-    private function createMockResponse(int $statusCode, ?array $responseData = null, ?string $content = null): ResponseInterface
-    {
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getStatusCode')->willReturn($statusCode);
-
-        if ($responseData !== null) {
-            $response->method('toArray')->willReturn($responseData);
-        }
-
-        if ($content !== null) {
-            $response->method('getContent')->willReturn($content);
-        }
-
-        return $response;
-    }
-
-    /**
      * Retourne le chemin d'une fixture de test existante.
      */
     private function fixturePath(string $name): string
@@ -59,176 +38,152 @@ final class MultiAnalyzeCommandTest extends TestCase
         return dirname(__DIR__, 2) . '/Fixtures/' . $name;
     }
 
-    /** Vérifie que la commande échoue sans clé API. */
-    #[Test]
-    public function testFailsWithoutApiKey(): void
+    private function createTester(): CommandTester
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
-
-        $prev = $_ENV['SYLIUS_UPGRADE_API_KEY'] ?? null;
-        unset($_ENV['SYLIUS_UPGRADE_API_KEY']);
-        putenv('SYLIUS_UPGRADE_API_KEY');
-
-        try {
-            $tester->execute([
-                'project-paths' => [$this->fixturePath('project-trivial')],
-            ]);
-
-            self::assertSame(Command::FAILURE, $tester->getStatusCode());
-            self::assertStringContainsString('API', $tester->getDisplay());
-        } finally {
-            if ($prev !== null) {
-                $_ENV['SYLIUS_UPGRADE_API_KEY'] = $prev;
-                putenv('SYLIUS_UPGRADE_API_KEY=' . $prev);
-            }
-        }
+        return new CommandTester(new MultiAnalyzeCommand([
+            new TwigTemplateOverrideAnalyzer(),
+            new SwiftMailerAnalyzer(),
+        ]));
     }
 
-    /** Vérifie que la commande ignore les répertoires introuvables. */
+    /** Vérifie l'affichage du tableau consolidé pour plusieurs projets. */
+    #[Test]
+    public function testAnalyzesMultipleProjects(): void
+    {
+        $tester = $this->createTester();
+
+        $tester->execute([
+            'project-paths' => [$this->fixturePath('project-trivial'), $this->fixturePath('project-moderate')],
+        ]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('Total', $display);
+        self::assertStringContainsString('Complexité', $display);
+    }
+
+    /** Vérifie que deux projets au même nom Composer restent distinguables. */
+    #[Test]
+    public function testDisambiguatesProjectsSharingTheSameName(): void
+    {
+        $tester = $this->createTester();
+
+        $tester->execute([
+            'project-paths' => [$this->fixturePath('project-trivial'), $this->fixturePath('project-moderate')],
+        ]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('(project-trivial)', $display);
+        self::assertStringContainsString('(project-moderate)', $display);
+    }
+
+    /** Vérifie que les répertoires introuvables sont ignorés sans bloquer l'analyse. */
     #[Test]
     public function testSkipsInvalidDirectories(): void
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
+        $tester = $this->createTester();
 
         $tester->execute([
-            'project-paths' => ['/chemin/inexistant/projet1', '/chemin/inexistant/projet2'],
-            '--api-key' => 'sua_agy_test',
+            'project-paths' => ['/chemin/inexistant', $this->fixturePath('project-trivial')],
         ]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('introuvable', $tester->getDisplay());
+    }
+
+    /** Vérifie l'échec quand aucun projet n'a pu être analysé. */
+    #[Test]
+    public function testFailsWhenNoProjectCanBeAnalyzed(): void
+    {
+        $tester = $this->createTester();
+
+        $tester->execute(['project-paths' => ['/chemin/inexistant']]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Aucun projet', $tester->getDisplay());
     }
 
-    /** Vérifie une analyse multi-projets réussie avec upload et téléchargement PDF. */
+    /** Vérifie l'ajout du budget avec l'option --tjm. */
     #[Test]
-    public function testSuccessfulMultiAnalyzeWithPdfDownload(): void
+    public function testShowsBudgetWithDailyRate(): void
     {
-        $pdfUrl = 'https://example.com/multi-report.pdf';
-        $pdfContent = '%PDF-1.4 consolidated';
-        $outputPath = sys_get_temp_dir() . '/multi-test-' . uniqid() . '.pdf';
-        $this->tempFiles[] = $outputPath;
-
-        /* POST /v1/reports/multi retourne l'URL du PDF */
-        $uploadResponse = $this->createMockResponse(200, ['pdf_url' => $pdfUrl]);
-        /* GET <pdf_url> retourne le contenu PDF */
-        $downloadResponse = $this->createMockResponse(200, null, $pdfContent);
-
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $httpClient->method('request')
-            ->willReturnCallback(function (string $method) use ($uploadResponse, $downloadResponse): ResponseInterface {
-                return $method === 'POST' ? $uploadResponse : $downloadResponse;
-            });
-
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        /* Utilise les fixtures existantes comme projets à analyser */
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
+        $tester = $this->createTester();
 
         $tester->execute([
-            'project-paths' => [$this->fixturePath('project-trivial')],
-            '--api-key' => 'sua_agy_test',
-            '--output' => $outputPath,
+            'project-paths' => [$this->fixturePath('project-moderate')],
+            '--tjm' => '600',
         ]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertFileExists($outputPath);
-        self::assertSame($pdfContent, file_get_contents($outputPath));
-        self::assertStringContainsString('téléchargé', $tester->getDisplay());
+        self::assertStringContainsString('Budget', $tester->getDisplay());
     }
 
-    /** Vérifie que la commande gère une erreur d'authentification. */
+    /** Vérifie le refus d'un TJM invalide avant toute analyse. */
     #[Test]
-    public function testHandlesAuthenticationError(): void
+    public function testRejectsInvalidDailyRate(): void
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $httpClient->method('request')
-            ->willReturn($this->createMockResponse(401));
-
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
+        $tester = $this->createTester();
 
         $tester->execute([
             'project-paths' => [$this->fixturePath('project-trivial')],
-            '--api-key' => 'expired-key',
+            '--tjm' => 'six-cents',
         ]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('authentification', $tester->getDisplay());
+        self::assertStringContainsString('--tjm', $tester->getDisplay());
     }
 
-    /** Vérifie que la commande gère l'absence de pdf_url dans la réponse. */
+    /** Vérifie le refus d'un format non supporté. */
     #[Test]
-    public function testHandlesMissingPdfUrl(): void
+    public function testRejectsUnsupportedFormat(): void
     {
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $httpClient->method('request')
-            ->willReturn($this->createMockResponse(200, ['status' => 'ok']));
-
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
+        $tester = $this->createTester();
 
         $tester->execute([
             'project-paths' => [$this->fixturePath('project-trivial')],
-            '--api-key' => 'sua_agy_test',
+            '--format' => 'sarif',
         ]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('PDF', $tester->getDisplay());
+        self::assertStringContainsString('Format non supporté', $tester->getDisplay());
     }
 
-    /** Vérifie que l'analyse de plusieurs projets envoie tous les rapports. */
+    /** Vérifie l'écriture du rapport JSON consolidé dans un fichier. */
     #[Test]
-    public function testAnalyzesMultipleProjects(): void
+    public function testWritesJsonReportToFile(): void
     {
-        $pdfContent = '%PDF-1.4';
-        $outputPath = sys_get_temp_dir() . '/multi-test-multi-' . uniqid() . '.pdf';
-        $this->tempFiles[] = $outputPath;
-
-        $uploadResponse = $this->createMockResponse(200, ['pdf_url' => 'https://example.com/multi.pdf']);
-        $downloadResponse = $this->createMockResponse(200, null, $pdfContent);
-
-        $httpClient = $this->createMock(HttpClientInterface::class);
-        $httpClient->method('request')
-            ->willReturnCallback(function (string $method) use ($uploadResponse, $downloadResponse): ResponseInterface {
-                return $method === 'POST' ? $uploadResponse : $downloadResponse;
-            });
-
-        $apiClient = new ApiClient($httpClient);
-        $jsonReporter = new JsonReporter();
-
-        $command = new MultiAnalyzeCommand([], $apiClient, $jsonReporter);
-        $tester = new CommandTester($command);
+        $outputFile = sys_get_temp_dir() . '/multi-analyze-' . uniqid() . '.json';
+        $this->tempFiles[] = $outputFile;
+        $tester = $this->createTester();
 
         $tester->execute([
-            'project-paths' => [
-                $this->fixturePath('project-trivial'),
-                $this->fixturePath('project-moderate'),
-            ],
-            '--api-key' => 'sua_agy_test',
-            '--output' => $outputPath,
+            'project-paths' => [$this->fixturePath('project-trivial'), $this->fixturePath('project-moderate')],
+            '--format' => 'json',
+            '--output' => $outputFile,
         ]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $data = json_decode((string) file_get_contents($outputFile), true);
+        self::assertIsArray($data);
+        self::assertSame(2, $data['meta']['projects_count']);
+    }
 
-        $display = $tester->getDisplay();
-        self::assertStringContainsString('2 rapport(s)', $display);
+    /** Vérifie la génération du PDF consolidé. */
+    #[Test]
+    public function testWritesPdfReportToFile(): void
+    {
+        $outputFile = sys_get_temp_dir() . '/multi-analyze-' . uniqid() . '.pdf';
+        $this->tempFiles[] = $outputFile;
+        $tester = $this->createTester();
+
+        $tester->execute([
+            'project-paths' => [$this->fixturePath('project-trivial'), $this->fixturePath('project-moderate')],
+            '--format' => 'pdf',
+            '--output' => $outputFile,
+            '--tjm' => '550',
+        ]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringStartsWith('%PDF-', (string) file_get_contents($outputFile));
     }
 }

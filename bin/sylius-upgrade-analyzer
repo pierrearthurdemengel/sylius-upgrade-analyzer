@@ -123,7 +123,6 @@ use PierreArthur\SyliusUpgradeAnalyzer\Command\CompatibilityMatrixCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Command\MultiAnalyzeCommand;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\AddonsMarketplaceClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Marketplace\PackagistClient;
-use PierreArthur\SyliusUpgradeAnalyzer\Report\ApiClient;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\ConsoleReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\CsvReporter;
 use PierreArthur\SyliusUpgradeAnalyzer\Report\JsonReporter;
@@ -272,13 +271,11 @@ $fixers = [
 ];
 $fixEngine = new FixEngine($fixers);
 
-/* Client API utilisé par l'analyse multi-projets */
-$apiClient = new ApiClient($httpClient);
 $reportLoader = new ReportLoader();
 
 $application = new Application('sylius-upgrade-analyzer', '1.5.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
-$application->add(new MultiAnalyzeCommand($analyzers, $apiClient, $jsonReporter));
+$application->add(new MultiAnalyzeCommand($analyzers));
 $application->add(new CompareCommand($reportLoader));
 $application->add(new CompatibilityMatrixCommand(
     new AddonsMarketplaceClient($httpClient),
