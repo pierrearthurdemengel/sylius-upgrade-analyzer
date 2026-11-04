@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Resource\ResourceBundleAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
+use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
@@ -19,6 +20,91 @@ final class ResourceBundleAnalyzerTest extends TestCase
 {
     /** Chemin vers le repertoire des fixtures */
     private const FIXTURES_PATH = __DIR__ . '/../../../Fixtures';
+
+    /** Repertoire temporaire servant de projet Sylius pour les cas cibles */
+    private string $tempDir;
+
+    protected function setUp(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . '/test_' . uniqid('resource_', true);
+        mkdir($this->tempDir, 0755, true);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeDirectory($this->tempDir);
+    }
+
+    /**
+     * Supprime recursivement un repertoire et son contenu.
+     */
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($items as $item) {
+            if ($item->isDir()) {
+                rmdir((string) $item->getRealPath());
+            } else {
+                unlink((string) $item->getRealPath());
+            }
+        }
+
+        rmdir($path);
+    }
+
+    /**
+     * Ecrit un fichier dans le projet temporaire et retourne son chemin reel,
+     * tel que l'analyseur le rapportera dans les issues.
+     */
+    private function writeProjectFile(string $relativePath, string $content): string
+    {
+        $fullPath = $this->tempDir . '/' . $relativePath;
+        $directory = \dirname($fullPath);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        file_put_contents($fullPath, $content);
+
+        $realPath = realpath($fullPath);
+        self::assertNotFalse($realPath);
+
+        return $realPath;
+    }
+
+    /**
+     * Cree un rapport de migration pointant vers le projet temporaire.
+     */
+    private function createTempReport(): MigrationReport
+    {
+        return new MigrationReport(
+            startedAt: new \DateTimeImmutable(),
+            detectedSyliusVersion: '1.12',
+            targetVersion: '2.0',
+            projectPath: $this->tempDir,
+        );
+    }
+
+    /**
+     * Retourne les issues dont le message contient le fragment donne.
+     *
+     * @return list<MigrationIssue>
+     */
+    private function issuesWithMessage(MigrationReport $report, string $fragment): array
+    {
+        return array_values(array_filter(
+            $report->getIssues(),
+            static fn ($issue): bool => str_contains($issue->getMessage(), $fragment),
+        ));
+    }
 
     /**
      * Cree un rapport de migration pointant vers le projet de fixture specifie.
@@ -168,5 +254,442 @@ final class ResourceBundleAnalyzerTest extends TestCase
 
         /* 1 ressource * 120 minutes = 120 minutes */
         self::assertSame(120, $yamlIssues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie que supports() retourne true pour un projet sans YAML de ressources
+     * mais dont le code source implemente ResourceInterface.
+     */
+    #[Test]
+    public function testSupportsReturnsTrueWithResourcePhpClassOnly(): void
+    {
+        $this->writeProjectFile('src/Entity/Brand.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App\Entity;
+
+            use Sylius\Component\Resource\Model\ResourceInterface;
+
+            class Brand implements ResourceInterface
+            {
+                public function getId(): ?int
+                {
+                    return null;
+                }
+            }
+            PHP);
+
+        self::assertTrue((new ResourceBundleAnalyzer())->supports($this->createTempReport()));
+    }
+
+    /**
+     * Verifie que supports() retourne false quand la configuration ne contient ni
+     * sylius_resource ni YAML valide, et que le code source ne reference aucune
+     * classe du systeme de ressources.
+     */
+    #[Test]
+    public function testSupportsReturnsFalseWithUnrelatedConfigAndSources(): void
+    {
+        $this->writeProjectFile('config/packages/framework.yaml', "framework:\n    secret: '%env(APP_SECRET)%'\n");
+        $this->writeProjectFile('config/packages/broken.yaml', "sylius_resource: [unclosed\n");
+        $this->writeProjectFile('src/Kernel.php', "<?php\n\nnamespace App;\n\nfinal class Kernel\n{\n}\n");
+
+        self::assertFalse((new ResourceBundleAnalyzer())->supports($this->createTempReport()));
+    }
+
+    /**
+     * Verifie qu'un projet vide (ni config/ ni src/) ne produit aucune issue.
+     */
+    #[Test]
+    public function testReturnsNoIssuesForProjectWithoutConfigAndSrc(): void
+    {
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie l'issue produite pour plusieurs ressources YAML dont une seule
+     * declare une factory : comptage, liste des noms, fichier et estimation.
+     */
+    #[Test]
+    public function testDetectsYamlResourcesWithCustomFactoryOnly(): void
+    {
+        $filePath = $this->writeProjectFile('config/packages/sylius_resource.yaml', <<<'YAML'
+            sylius_resource:
+                resources:
+                    app.brand:
+                        classes:
+                            model: App\Entity\Brand
+                            factory: App\Factory\BrandFactory
+                    app.supplier:
+                        classes:
+                            model: App\Entity\Supplier
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'definition(s) de ressource(s) YAML');
+        self::assertCount(1, $issues);
+        self::assertStringStartsWith('2 definition(s)', $issues[0]->getMessage());
+        self::assertStringContainsString('app.brand, app.supplier', $issues[0]->getDetail());
+        self::assertStringContainsString('Certaines definissent des factories personnalises.', $issues[0]->getDetail());
+        self::assertSame($filePath, $issues[0]->getFile());
+        self::assertSame(Severity::WARNING, $issues[0]->getSeverity());
+        self::assertSame(Category::RESOURCE, $issues[0]->getCategory());
+        /* 2 ressources * 120 minutes */
+        self::assertSame(240, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie que le detail mentionne a la fois factories et repositories
+     * lorsque les deux sont personnalises.
+     */
+    #[Test]
+    public function testDetailMentionsFactoriesAndRepositoriesWhenBothAreCustomized(): void
+    {
+        $this->writeProjectFile('config/packages/sylius_resource.yml', <<<'YAML'
+            sylius_resource:
+                resources:
+                    app.brand:
+                        classes:
+                            model: App\Entity\Brand
+                            factory: App\Factory\BrandFactory
+                            repository: App\Repository\BrandRepository
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'definition(s) de ressource(s) YAML');
+        self::assertCount(1, $issues);
+        self::assertStringContainsString(
+            'Certaines definissent des factories et repositories personnalises.',
+            $issues[0]->getDetail(),
+        );
+    }
+
+    /**
+     * Verifie qu'aucune mention de complexite n'est ajoutee quand les ressources
+     * ne declarent que leur modele, et que les definitions non structurees
+     * (ressource nulle, classes scalaires) sont tolerees.
+     */
+    #[Test]
+    public function testDetailHasNoComplexityMentionForModelOnlyResources(): void
+    {
+        $this->writeProjectFile('config/packages/sylius_resource.yaml', <<<'YAML'
+            sylius_resource:
+                resources:
+                    app.brand:
+                        classes:
+                            model: App\Entity\Brand
+                    app.supplier: ~
+                    app.warehouse:
+                        classes: App\Entity\Warehouse
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'definition(s) de ressource(s) YAML');
+        self::assertCount(1, $issues);
+        self::assertStringStartsWith('3 definition(s)', $issues[0]->getMessage());
+        self::assertStringNotContainsString('Certaines definissent', $issues[0]->getDetail());
+        self::assertSame(360, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie que les fichiers YAML invalides, sans ressources ou avec une cle
+     * sylius_resource non structuree ne produisent aucune issue.
+     */
+    #[Test]
+    public function testIgnoresInvalidOrEmptyResourceYaml(): void
+    {
+        $this->writeProjectFile('config/packages/broken.yaml', "sylius_resource: [unclosed\n");
+        $this->writeProjectFile('config/packages/scalar.yaml', "sylius_resource: enabled\n");
+        $this->writeProjectFile('config/packages/empty.yaml', "sylius_resource:\n    resources: []\n");
+        $this->writeProjectFile('config/packages/mapping.yaml', "sylius_resource:\n    mapping:\n        paths: ['%kernel.project_dir%/src/Entity']\n");
+        $this->writeProjectFile('config/packages/plain.yaml', "just a string\n");
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection d'un modele implementant ResourceInterface :
+     * message, ligne de la classe, fichier et estimation.
+     */
+    #[Test]
+    public function testDetectsResourceInterfaceImplementation(): void
+    {
+        $filePath = $this->writeProjectFile('src/Entity/Brand.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App\Entity;
+
+            use Sylius\Component\Resource\Model\ResourceInterface;
+
+            class Brand implements ResourceInterface
+            {
+                private ?int $id = null;
+
+                public function getId(): ?int
+                {
+                    return $this->id;
+                }
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Implementation de ressource personnalisee detectee : Brand');
+        self::assertCount(1, $issues);
+        self::assertSame(9, $issues[0]->getLine());
+        self::assertSame($filePath, $issues[0]->getFile());
+        self::assertStringContainsString('(ligne 9) implemente ResourceInterface', $issues[0]->getDetail());
+        self::assertStringContainsString('SyliusResourceBundle 2.x', $issues[0]->getSuggestion());
+        self::assertSame(120, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie qu'une implementation referencant ResourceInterface par son nom
+     * pleinement qualifie est egalement detectee.
+     */
+    #[Test]
+    public function testDetectsFullyQualifiedResourceInterfaceImplementation(): void
+    {
+        $this->writeProjectFile('src/Entity/Supplier.php', <<<'PHP'
+            <?php
+
+            namespace App\Entity;
+
+            class Supplier implements \Sylius\Component\Resource\Model\ResourceInterface
+            {
+                public function getId(): ?int
+                {
+                    return null;
+                }
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Implementation de ressource personnalisee detectee : Supplier');
+        self::assertCount(1, $issues);
+        self::assertSame(5, $issues[0]->getLine());
+    }
+
+    /**
+     * Verifie la detection d'une factory personnalisee implementant FactoryInterface.
+     */
+    #[Test]
+    public function testDetectsFactoryInterfaceImplementation(): void
+    {
+        $this->writeProjectFile('src/Factory/BrandFactory.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App\Factory;
+
+            use App\Entity\Brand;
+            use Sylius\Component\Resource\Factory\FactoryInterface;
+
+            final class BrandFactory implements FactoryInterface
+            {
+                public function createNew(): Brand
+                {
+                    return new Brand();
+                }
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Implementation de factory personnalisee detectee : BrandFactory');
+        self::assertCount(1, $issues);
+        self::assertSame(10, $issues[0]->getLine());
+        self::assertStringContainsString('implemente FactoryInterface', $issues[0]->getDetail());
+        self::assertStringContainsString('createNew()', $issues[0]->getSuggestion());
+        self::assertSame(120, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie la detection d'un repository etendant EntityRepository de Sylius.
+     */
+    #[Test]
+    public function testDetectsEntityRepositoryExtension(): void
+    {
+        $filePath = $this->writeProjectFile('src/Repository/BrandRepository.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App\Repository;
+
+            use Sylius\Bundle\ResourceBundle\Doctrine\ORM\EntityRepository;
+
+            class BrandRepository extends EntityRepository
+            {
+                public function findOneByCode(string $code): ?object
+                {
+                    return $this->findOneBy(['code' => $code]);
+                }
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Repository personnalise detecte : BrandRepository');
+        self::assertCount(1, $issues);
+        self::assertSame(9, $issues[0]->getLine());
+        self::assertSame($filePath, $issues[0]->getFile());
+        self::assertStringContainsString('(ligne 9) etend EntityRepository', $issues[0]->getDetail());
+        self::assertSame(120, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie qu'un repository etendant EntityRepository par son nom pleinement
+     * qualifie est detecte.
+     */
+    #[Test]
+    public function testDetectsFullyQualifiedEntityRepositoryExtension(): void
+    {
+        $this->writeProjectFile('src/Repository/SupplierRepository.php', <<<'PHP'
+            <?php
+
+            namespace App\Repository;
+
+            class SupplierRepository extends \Sylius\Bundle\ResourceBundle\Doctrine\ORM\EntityRepository
+            {
+            }
+            PHP);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Repository personnalise detecte : SupplierRepository'));
+    }
+
+    /**
+     * Verifie que les classes qui ne font que mentionner les interfaces ou
+     * EntityRepository (sans heritage ni implementation), ainsi que les fichiers
+     * PHP non parsables, ne produisent aucune issue.
+     */
+    #[Test]
+    public function testIgnoresPhpFilesOnlyMentioningResourceTypes(): void
+    {
+        $this->writeProjectFile('src/Service/BrandCatalog.php', <<<'PHP'
+            <?php
+
+            namespace App\Service;
+
+            use Psr\Log\LoggerInterface;
+
+            /**
+             * Utilise le ResourceInterface, la FactoryInterface et l'EntityRepository
+             * des marques sans les etendre.
+             */
+            final class BrandCatalog extends \ArrayObject implements \Countable
+            {
+            }
+
+            final class StandaloneCatalog
+            {
+            }
+            PHP);
+        $this->writeProjectFile('src/Broken/BrokenRepository.php', "<?php\n\nclass BrokenRepository extends EntityRepository implements ResourceInterface, FactoryInterface {\n");
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie la detection d'une surcharge directe d'un service Sylius
+     * (redefinition de sylius.repository.*) dans services.yaml.
+     */
+    #[Test]
+    public function testDetectsDirectSyliusServiceOverride(): void
+    {
+        $filePath = $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                _defaults:
+                    autowire: true
+                sylius.repository.product:
+                    class: App\Repository\ProductRepository
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Surcharge de service Sylius detectee');
+        self::assertCount(1, $issues);
+        self::assertSame('Surcharge de service Sylius detectee : sylius.repository.product', $issues[0]->getMessage());
+        self::assertStringContainsString('services.yaml', $issues[0]->getDetail());
+        self::assertSame($filePath, $issues[0]->getFile());
+        self::assertSame(60, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie la detection d'un decorateur de service Sylius (cle decorates).
+     */
+    #[Test]
+    public function testDetectsSyliusServiceDecorator(): void
+    {
+        $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                App\Factory\CustomerFactory:
+                    decorates: sylius.factory.customer
+                    arguments: ['@.inner']
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        $issues = $this->issuesWithMessage($report, 'Surcharge de service Sylius detectee');
+        self::assertCount(1, $issues);
+        self::assertSame('Surcharge de service Sylius detectee : App\Factory\CustomerFactory', $issues[0]->getMessage());
+        self::assertSame(60, $issues[0]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie que les services applicatifs, les decorateurs de services non Sylius
+     * et les sections services non structurees ne sont pas signales.
+     */
+    #[Test]
+    public function testIgnoresNonSyliusServices(): void
+    {
+        $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                App\Newsletter\Subscriber: ~
+                App\Mailer\LoggingMailer:
+                    decorates: mailer.mailer
+                App\Shipping\Calculator:
+                    decorates: ['sylius.shipping_calculator']
+                app.brand_provider: '@App\Provider\BrandProvider'
+            YAML);
+        $this->writeProjectFile('config/packages/scalar_services.yaml', "services: none\n");
+        /* Une liste YAML produit des cles entieres qui ne sont pas des identifiants de service */
+        $this->writeProjectFile('config/packages/list_services.yaml', "services:\n    - sylius.repository.product\n");
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertSame([], $report->getIssues());
     }
 }
