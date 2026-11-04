@@ -24,35 +24,34 @@ This document describes every built-in analyzer included in Sylius Upgrade Analy
 16. [Removed Payment Gateway](#16-removed-payment-gateway)
 17. [Service Decorator](#17-service-decorator)
 18. [Order Processor Priority](#18-order-processor-priority)
-19. [Form Type Extension Priority](#19-form-type-extension-priority)
+19. [Removed Form Type Extension](#19-removed-form-type-extension)
 20. [Behat Context Deprecation](#20-behat-context-deprecation)
 21. [Admin Menu Event](#21-admin-menu-event)
-22. [Translation Key](#22-translation-key)
-23. [Promotion Rule Checker](#23-promotion-rule-checker)
-24. [Shipping Calculator](#24-shipping-calculator)
-25. [Doctrine XML Mapping](#25-doctrine-xml-mapping)
-26. [Custom Fixture](#26-custom-fixture)
-27. [Multi-Store Channel](#27-multi-store-channel)
-28. [Bundle Configuration](#28-bundle-configuration)
-29. [Calendar to Clock](#29-calendar-to-clock)
-30. [Security Firewall](#30-security-firewall)
-31. [User Model Field](#31-user-model-field)
-32. [Removed Class](#32-removed-class)
-33. [Renamed Service ID](#33-renamed-service-id)
-34. [Removed Route](#34-removed-route)
-35. [Sonata Block Event](#35-sonata-block-event)
-36. [LiipImagine Config](#36-liip-imagine-config)
-37. [API Serialization Group](#37-api-serialization-group)
-38. [API Endpoint Restructure](#38-api-endpoint-restructure)
-39. [Constructor Signature](#39-constructor-signature)
-40. [Grid Filter Entity](#40-grid-filter-entity)
-41. [Use Webpack Config](#41-use-webpack-config)
-42. [PHP Node Version](#42-php-node-version)
-43. [API Query Extension Signature](#43-api-query-extension-signature)
-44. [Class Move](#44-class-move)
-45. [Service Visibility](#45-service-visibility)
-46. [Payment Request Env](#46-payment-request-env)
-47. [Deprecated Bundle Package](#47-deprecated-bundle-package)
+22. [Promotion Rule Checker](#22-promotion-rule-checker)
+23. [Shipping Calculator](#23-shipping-calculator)
+24. [Doctrine XML Mapping](#24-doctrine-xml-mapping)
+25. [Custom Fixture](#25-custom-fixture)
+26. [Multi-Store Channel](#26-multi-store-channel)
+27. [Bundle Configuration](#27-bundle-configuration)
+28. [Calendar to Clock](#28-calendar-to-clock)
+29. [Security Firewall](#29-security-firewall)
+30. [User Model Field](#30-user-model-field)
+31. [Removed Class](#31-removed-class)
+32. [Renamed Service ID](#32-renamed-service-id)
+33. [Removed Route](#33-removed-route)
+34. [Sonata Block Event](#34-sonata-block-event)
+35. [LiipImagine Config](#35-liipimagine-config)
+36. [API Serialization Group](#36-api-serialization-group)
+37. [API Endpoint Restructure](#37-api-endpoint-restructure)
+38. [Constructor Signature](#38-constructor-signature)
+39. [Grid Filter Entity](#39-grid-filter-entity)
+40. [Use Webpack Config](#40-use-webpack-config)
+41. [PHP Node Version](#41-php-node-version)
+42. [API Query Extension Signature](#42-api-query-extension-signature)
+43. [Class Move](#43-class-move)
+44. [Service Visibility](#44-service-visibility)
+45. [Payment Request Env](#45-payment-request-env)
+46. [Deprecated Bundle Package](#46-deprecated-bundle-package)
 
 ---
 
@@ -479,24 +478,24 @@ Per-processor basis, typically 30-60 minutes per affected order processor.
 
 ---
 
-## 19. Form Type Extension Priority
+## 19. Removed Form Type Extension
 
-**Class:** `FormTypeExtensionPriorityAnalyzer`
+**Class:** `RemovedFormTypeExtensionAnalyzer`
 **Category:** Deprecation
-**Severity:** WARNING
+**Severity:** BREAKING
 
 ### What it detects
 
-- Form type extensions with deprecated `getExtendedType()` method (should use `getExtendedTypes()`)
-- Priority parameters that have changed in the form extension registration
+- Classes extending one of the five form type extensions removed from Sylius 2.0 core (`CountryTypeExtension`, `CustomerTypeExtension`, `LocaleTypeExtension`, `CatalogPromotionActionTypeExtension`, `CatalogPromotionScopeTypeExtension`), including aliased imports
+- Service configuration referencing a removed extension service (`sylius.form.extension.type.country`, `.customer`, `.locale`): redefinition, decoration, alias or injection
 
 ### Estimation formula
 
-Per-extension basis, typically 30 minutes per affected form type extension.
+60 minutes per inheriting class or removed service reference.
 
 ### Documentation
 
-- [Symfony Form Type Extensions](https://symfony.com/doc/current/form/create_form_type_extension.html)
+- [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md)
 
 ---
 
@@ -545,28 +544,7 @@ Per-subscriber basis, typically 60 minutes per affected menu customization.
 
 ---
 
-## 22. Translation Key
-
-**Class:** `TranslationKeyAnalyzer`
-**Category:** Deprecation
-**Severity:** WARNING
-
-### What it detects
-
-- Translation files (`translations/`) using deprecated `sylius.*` translation keys
-- Keys that have been renamed, moved, or removed in Sylius 2.x
-
-### Estimation formula
-
-Per-key basis, typically 5-10 minutes per deprecated translation key.
-
-### Documentation
-
-- [Sylius Translation](https://docs.sylius.com/en/latest/the-book/architecture/translations.html)
-
----
-
-## 23. Promotion Rule Checker
+## 22. Promotion Rule Checker
 
 **Class:** `PromotionRuleCheckerAnalyzer`
 **Category:** Deprecation
@@ -588,7 +566,7 @@ Per-checker basis, typically 120 minutes per custom promotion rule checker.
 
 ---
 
-## 24. Shipping Calculator
+## 23. Shipping Calculator
 
 **Class:** `ShippingCalculatorAnalyzer`
 **Category:** Deprecation
@@ -610,7 +588,7 @@ Per-calculator basis, typically 120 minutes per custom shipping calculator.
 
 ---
 
-## 25. Doctrine XML Mapping
+## 24. Doctrine XML Mapping
 
 **Class:** `DoctrineXmlMappingAnalyzer`
 **Category:** Deprecation
@@ -632,7 +610,7 @@ Per-mapping-file basis, typically 30-60 minutes per affected mapping file.
 
 ---
 
-## 26. Custom Fixture
+## 25. Custom Fixture
 
 **Class:** `CustomFixtureAnalyzer`
 **Category:** Deprecation
@@ -654,29 +632,28 @@ Per-fixture basis, typically 60 minutes per custom fixture class.
 
 ---
 
-## 27. Multi-Store Channel
+## 26. Multi-Store Channel
 
 **Class:** `MultiStoreChannelAnalyzer`
 **Category:** Deprecation
-**Severity:** WARNING
+**Severity:** BREAKING / WARNING
 
 ### What it detects
 
-- Channel configuration patterns that conflict with Sylius 2.x multi-store architecture
-- Hardcoded channel references in PHP code
-- Configuration assumptions that break with the new channel scoping
+- Calls to `ChannelRepositoryInterface::findOneByHostname()`, deprecated since Sylius 1.11 and removed in 2.0 (BREAKING), including nullsafe calls
+- Custom channel and locale contexts, whose dependencies changed signature in 2.0 (WARNING)
 
 ### Estimation formula
 
-Based on the number of channel-specific configurations and hardcoded references. Typically 60-240 minutes depending on the scope.
+240 minutes per detected call or custom context.
 
 ### Documentation
 
-- [Sylius Channels](https://docs.sylius.com/en/latest/the-book/configuration/channels.html)
+- [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md)
 
 ---
 
-## 28. Bundle Configuration
+## 27. Bundle Configuration
 
 **Class:** `BundleConfigurationAnalyzer`
 **Category:** Deprecation
@@ -691,7 +668,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 29. Calendar to Clock
+## 28. Calendar to Clock
 
 **Class:** `CalendarClockAnalyzer`
 **Category:** Deprecation
@@ -707,7 +684,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 30. Security Firewall
+## 29. Security Firewall
 
 **Class:** `SecurityFirewallAnalyzer`
 **Category:** Deprecation
@@ -722,7 +699,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 31. User Model Field
+## 30. User Model Field
 
 **Class:** `UserModelFieldAnalyzer`
 **Category:** Deprecation
@@ -738,7 +715,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 32. Removed Class
+## 31. Removed Class
 
 **Class:** `RemovedClassAnalyzer`
 **Category:** Deprecation
@@ -759,7 +736,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 33. Renamed Service ID
+## 32. Renamed Service ID
 
 **Class:** `RenamedServiceIdAnalyzer`
 **Category:** Deprecation
@@ -777,7 +754,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 34. Removed Route
+## 33. Removed Route
 
 **Class:** `RemovedRouteAnalyzer`
 **Category:** Deprecation
@@ -795,7 +772,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 35. Sonata Block Event
+## 34. Sonata Block Event
 
 **Class:** `SonataBlockEventAnalyzer`
 **Category:** Twig
@@ -811,7 +788,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 36. LiipImagine Config
+## 35. LiipImagine Config
 
 **Class:** `LiipImagineConfigAnalyzer`
 **Category:** Deprecation
@@ -827,7 +804,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 37. API Serialization Group
+## 36. API Serialization Group
 
 **Class:** `ApiSerializationGroupAnalyzer`
 **Category:** API
@@ -842,7 +819,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 38. API Endpoint Restructure
+## 37. API Endpoint Restructure
 
 **Class:** `ApiEndpointRestructureAnalyzer`
 **Category:** API
@@ -860,7 +837,7 @@ Based on the number of channel-specific configurations and hardcoded references.
 
 ---
 
-## 39. Constructor Signature
+## 38. Constructor Signature
 
 **Class:** `ConstructorSignatureAnalyzer`
 **Category:** Deprecation
@@ -878,7 +855,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 40. Grid Filter Entity
+## 39. Grid Filter Entity
 
 **Class:** `GridFilterEntityAnalyzer`
 **Category:** Grid
@@ -893,7 +870,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 41. Use Webpack Config
+## 40. Use Webpack Config
 
 **Class:** `UseWebpackConfigAnalyzer`
 **Category:** Frontend
@@ -908,7 +885,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 42. PHP Node Version
+## 41. PHP Node Version
 
 **Class:** `PhpNodeVersionAnalyzer`
 **Category:** Deprecation
@@ -924,7 +901,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 43. API Query Extension Signature
+## 42. API Query Extension Signature
 
 **Class:** `ApiQueryExtensionSignatureAnalyzer`
 **Category:** API
@@ -939,7 +916,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 44. Class Move
+## 43. Class Move
 
 **Class:** `ClassMoveAnalyzer`
 **Category:** Deprecation
@@ -958,7 +935,7 @@ PHP classes extending 24 Sylius classes with changed constructor signatures:
 
 ---
 
-## 45. Service Visibility
+## 44. Service Visibility
 
 **Class:** `ServiceVisibilityAnalyzer`
 **Category:** Deprecation
@@ -975,7 +952,7 @@ Direct container access to Sylius services (all now private by default):
 
 ---
 
-## 46. Payment Request Env
+## 45. Payment Request Env
 
 **Class:** `PaymentRequestEnvAnalyzer`
 **Category:** Deprecation
@@ -991,7 +968,7 @@ Direct container access to Sylius services (all now private by default):
 
 ---
 
-## 47. Deprecated Bundle Package
+## 46. Deprecated Bundle Package
 
 **Class:** `DeprecatedBundlePackageAnalyzer`
 **Category:** Deprecation
