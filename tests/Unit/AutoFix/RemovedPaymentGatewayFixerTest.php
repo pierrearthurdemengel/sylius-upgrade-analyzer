@@ -82,12 +82,8 @@ final class RemovedPaymentGatewayFixerTest extends TestCase
         self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
         /* Tout le bloc est commente : factory_name ne doit pas remonter sous gateways */
         self::assertSame(
-            'gateways:
-    # TODO: passerelle supprimee du coeur dans Sylius 2.0, a remplacer par un plugin de paiement
-'
-            . '    # stripe_checkout:
-    #     factory_name: stripe_checkout
-',
+            "gateways:\n    # TODO: passerelle supprimee du coeur dans Sylius 2.0, a remplacer par un plugin de paiement\n"
+            . "    # stripe_checkout:\n    #     factory_name: stripe_checkout\n",
             $fix->fixedContent,
         );
         self::assertSame(['gateways' => null], Yaml::parse($fix->fixedContent));
@@ -111,19 +107,28 @@ final class RemovedPaymentGatewayFixerTest extends TestCase
     public function testKeepsOtherGatewaysIntact(): void
     {
         $file = 'config/gateways.yaml';
-        file_put_contents($this->tempDir . '/' . $file, 'gateways:
-    stripe_checkout:
-        factory_name: stripe_checkout
-
-        config: { publishable_key: pk }
-    offline:
-        factory_name: offline
-');
+        file_put_contents(
+            $this->tempDir . '/' . $file,
+            "gateways:\n    stripe_checkout:\n        factory_name: stripe_checkout\n\n        config: { publishable_key: pk }\n    offline:\n        factory_name: offline\n",
+        );
 
         $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
 
         self::assertNotNull($fix);
         self::assertSame(['gateways' => ['offline' => ['factory_name' => 'offline']]], Yaml::parse($fix->fixedContent));
+    }
+
+    #[Test]
+    public function testHandlesWindowsLineEndings(): void
+    {
+        $file = 'config/gateways.yaml';
+        file_put_contents($this->tempDir . '/' . $file, "gateways:\r\n    stripe_checkout:\r\n        factory_name: stripe_checkout\r\n    offline:\r\n        factory_name: offline\r\n");
+
+        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertSame(['gateways' => ['offline' => ['factory_name' => 'offline']]], Yaml::parse($fix->fixedContent));
+        self::assertStringContainsString("    # stripe_checkout:\r\n", $fix->fixedContent);
     }
 
     #[Test]

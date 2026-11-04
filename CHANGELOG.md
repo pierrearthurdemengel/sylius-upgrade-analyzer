@@ -38,6 +38,7 @@ Chaque correctif automatique a été rejoué sur une entrée réelle et chaque r
 
 ### Fixed
 - `Deprecated Bundle Package` laissait une virgule finale et rendait `composer.json` invalide
+- `Removed Payment Gateway` ne reconnaissait pas les fichiers YAML aux fins de ligne Windows (CRLF)
 - `SwiftMailer` produisait un YAML où les options restaient hors de `framework.mailer`, et `new Email('Hello')`, appel invalide
 - `Twig Hook` générait un YAML mal indenté, ignoré par Sylius
 - `Removed Payment Gateway` ne commentait que la clé de la passerelle, rattachant `factory_name` à `gateways`
