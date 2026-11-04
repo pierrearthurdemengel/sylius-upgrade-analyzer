@@ -7,6 +7,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Removed
+- Commandes `sylius-upgrade:upload`, `sylius-upgrade:history` et `sylius-upgrade:webhook` : elles dépendaient du service hébergé, qui n'existe plus
+- Mode `--before-id` / `--after-id` / `--api-key` de `sylius-upgrade:compare` (la comparaison de fichiers JSON locaux reste disponible)
+- Options `--pdf` et `--api-key` de `sylius-upgrade:analyze`, qui n'avaient aucun effet
+- `ReportUploader` et `StatisticsCollector` (envoi de données vers des domaines qui ne sont plus exploités)
+
+### Fixed
+- `sylius-upgrade:matrix` est désormais enregistrée dans le binaire (la commande existait mais n'était pas câblée)
+- Le pied de page console ne propose plus une génération PDF inexistante
+
 ## [1.5.0] - 2026-04-07
 
 ### Added

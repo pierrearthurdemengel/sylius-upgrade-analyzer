@@ -12,8 +12,6 @@ Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every*
 
 Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md), [UPGRADE-API-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/UPGRADE-API-2.0.md), and [CHANGELOG-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/CHANGELOG-2.0.md). Nothing is left unchecked.
 
-**Web service available at [sylius-upgrade-analyzer.dev](https://sylius-upgrade-analyzer.dev)** -- upload your `composer.json`, get a professional PDF report with time estimates and migration roadmap.
-
 ---
 
 ## Features
@@ -94,14 +92,13 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 48 | API Endpoint Restructure | 8+ restructured/removed API endpoint paths |
 | 49 | API Query Extension Signature | `$operationName` to `Operation $operation` parameter change |
 
-### 6 Output Reporters
+### 5 Output Reporters
 
 - **Console** -- Rich terminal output with ASCII gauge, colored severity levels, category breakdown
 - **JSON** -- Machine-readable structured report
 - **CSV** -- Excel-compatible export (UTF-8 BOM, semicolon separator) via `--format=csv`
 - **SARIF** -- Static Analysis Results Interchange Format (GitHub Code Scanning compatible)
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
-- **PDF** -- Professional report for stakeholders (via [sylius-upgrade-analyzer.dev](https://sylius-upgrade-analyzer.dev))
 
 ### 45 Auto-Fixers
 
@@ -163,7 +160,7 @@ Run the analyzer in your CI pipeline, post PR comments, and upload SARIF to GitH
 - **Plugin compatibility** -- checks Sylius Addons Marketplace and Packagist
 - **Multi-project analysis** -- consolidated PDF for agencies managing multiple Sylius projects
 - **Report comparison** -- diff two reports to track migration progress
-- **Webhook notifications** -- get notified when a new report is generated
+- **Plugin compatibility matrix** -- check a list of plugins against the target version
 
 ---
 
@@ -206,9 +203,6 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=sarif --outpu
 
 # Markdown report
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=markdown --output=report.md
-
-# PDF report
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --pdf
 
 # CSV export (Excel-compatible)
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=csv --output=report.csv
@@ -272,16 +266,6 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --diff
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --sprint-plan --velocity=40
 ```
 
-### Upload Report for PDF Generation
-
-```bash
-# Generate JSON first, then upload for PDF generation
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=json --output=report.json
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:upload report.json --api-key=sua_xxx --output=report.pdf
-```
-
-> **Tip:** You can also upload directly on [sylius-upgrade-analyzer.dev](https://sylius-upgrade-analyzer.dev) without an API key for a one-time report.
-
 ### Multi-Project Analysis (Agency)
 
 ```bash
@@ -294,33 +278,11 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:multi-analyze \
 ### Compare Reports
 
 ```bash
-# Compare two local JSON reports
+# Compare two JSON reports (e.g. before and after a migration sprint)
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=json --output=before.json
+# ... fix some issues ...
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:analyze --format=json --output=after.json
 vendor/bin/sylius-upgrade-analyzer sylius-upgrade:compare before.json after.json
-
-# Compare two reports via API (by report ID)
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:compare \
-  --before-id=uuid1 --after-id=uuid2 --api-key=sua_agy_xxx
-```
-
-### Report History (Agency)
-
-```bash
-# View past reports
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:history --api-key=sua_agy_xxx --limit=10
-```
-
-### Webhook Management (Agency)
-
-```bash
-# View current webhook config
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:webhook get --api-key=sua_agy_xxx
-
-# Set a webhook
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:webhook set \
-  --url=https://hooks.example.com/migration --secret=mysecret --api-key=sua_agy_xxx
-
-# Delete webhook
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:webhook delete --api-key=sua_agy_xxx
 ```
 
 ---
@@ -497,10 +459,15 @@ See [docs/custom-rules.md](docs/custom-rules.md) for the full reference.
 
 ## Compatibility Matrix
 
-Check the compatibility matrix for Sylius plugins:
+Check the compatibility of Sylius plugins with the target version (Addons Marketplace + Packagist):
 
 ```bash
-vendor/bin/sylius-upgrade-analyzer sylius-upgrade:compatibility-matrix
+# Read the plugins from the composer.json of the current directory
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:matrix
+
+# Check an explicit list, output as Markdown
+vendor/bin/sylius-upgrade-analyzer sylius-upgrade:matrix \
+  bitbag/wishlist-plugin,sylius/invoicing-plugin --format=markdown
 ```
 
 ---
@@ -526,18 +493,6 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 
 ---
 
-## Pricing
-
-The CLI tool is **free and open-source** (MIT License). Advanced features are available via [sylius-upgrade-analyzer.dev](https://sylius-upgrade-analyzer.dev):
-
-| Plan | Price | Includes |
-|------|-------|----------|
-| **Report** | 59 EUR (one-time) | 1 professional PDF report with migration roadmap |
-| **Studio** | 299 EUR/year | Unlimited reports + white-label PDFs (agency logo, colors) |
-| **Agency** | 799 EUR/year | Studio features + 4 seat keys + multi-project consolidated reports |
-
----
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
@@ -549,4 +504,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 **Pierre-Arthur Demengel** -- [pierrearthur.demengel@gmail.com](mailto:pierrearthur.demengel@gmail.com)
 
 - GitHub: [github.com/pierrearthurdemengel/sylius-upgrade-analyzer](https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer)
-- Website: [sylius-upgrade-analyzer.dev](https://sylius-upgrade-analyzer.dev)
