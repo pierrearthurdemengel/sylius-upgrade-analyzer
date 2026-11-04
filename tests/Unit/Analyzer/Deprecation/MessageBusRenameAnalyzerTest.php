@@ -356,10 +356,12 @@ PHP);
     }
 
     /**
-     * Verifie la detection d'un parametre de constructeur nomme $syliusEventBus.
+     * Verifie qu'un parametre de constructeur $syliusEventBus n'est pas signale :
+     * le bus sylius.event_bus de Sylius 2.0 produit le meme alias d'autowiring
+     * que l'ancien sylius_event.bus, le nom d'argument reste donc valide.
      */
     #[Test]
-    public function testDetectsEventBusConstructorParameter(): void
+    public function testIgnoresEventBusArgumentWhoseAutowiringNameIsUnchanged(): void
     {
         $this->writeFile('src/EventListener/OrderCompleteListener.php', <<<'PHP'
 <?php
@@ -382,11 +384,69 @@ PHP);
 
         $analyzer->analyze($report);
 
-        $variableIssues = array_filter(
-            $report->getIssues(),
-            static fn ($issue): bool => $issue->getMessage() === 'Variable "$syliusEventBus" detectee ligne 10',
-        );
-        self::assertNotEmpty($variableIssues);
+        self::assertSame([], $report->getIssues());
+    }
+
+    /**
+     * Verifie qu'un parametre de constructeur $syliusDefaultBus produit une seule issue
+     * (et non une pour le parametre et une pour sa variable), soit 60 minutes au total.
+     */
+    #[Test]
+    public function testReportsDefaultBusConstructorParameterOnlyOnce(): void
+    {
+        $this->writeFile('src/Controller/ReorderAction.php', <<<'PHP'
+<?php
+
+namespace App\Controller;
+
+use Symfony\Component\Messenger\MessageBusInterface;
+
+final class ReorderAction
+{
+    public function __construct(
+        private MessageBusInterface $syliusDefaultBus,
+    ) {
+    }
+}
+PHP);
+
+        $analyzer = new MessageBusRenameAnalyzer();
+        $report = $this->createReport();
+
+        $analyzer->analyze($report);
+
+        $issues = $report->getIssues();
+        self::assertCount(2, $issues);
+        self::assertSame('Variable "$syliusDefaultBus" detectee ligne 10', $issues[0]->getMessage());
+        self::assertSame('Renommer $syliusDefaultBus en $syliusCommandBus.', $issues[0]->getSuggestion());
+        self::assertSame(60, $issues[1]->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie que supports retourne true quand seul un argument $syliusDefaultBus
+     * reference l'ancien bus par autowiring, sans chaine de bus explicite.
+     */
+    #[Test]
+    public function testSupportsReturnsTrueForDefaultBusArgumentOnly(): void
+    {
+        $this->writeFile('src/Controller/ReorderAction.php', <<<'PHP'
+<?php
+
+namespace App\Controller;
+
+use Symfony\Component\Messenger\MessageBusInterface;
+
+final class ReorderAction
+{
+    public function __construct(private MessageBusInterface $syliusDefaultBus)
+    {
+    }
+}
+PHP);
+
+        $analyzer = new MessageBusRenameAnalyzer();
+
+        self::assertTrue($analyzer->supports($this->createReport()));
     }
 
     /**
