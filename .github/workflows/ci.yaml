@@ -15,7 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.2', '8.3', '8.4']
-        symfony: ['6.4', '7.2']
+        # « lock » installe exactement les versions de composer.lock (Symfony 7.4).
+        # « 6.4 » ne rétrograde que les composants Symfony requis, en version figée :
+        # la CI ne doit jamais récupérer une dépendance publiée la veille.
+        symfony: ['lock', '6.4']
 
     steps:
       - uses: actions/checkout@v4
@@ -24,24 +27,30 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          coverage: xdebug
+          coverage: none
           tools: composer:v2
 
-      - name: Configure Symfony version
-        run: |
-          composer config extra.symfony.require "${{ matrix.symfony }}.*"
+      - name: Install dependencies from lock file
+        run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Install dependencies
-        run: composer update --prefer-dist --no-interaction
+      - name: Downgrade Symfony components to 6.4
+        if: matrix.symfony == '6.4'
+        run: >
+          composer update --no-interaction --no-progress
+          symfony/console symfony/finder symfony/http-client symfony/yaml
+          symfony/framework-bundle symfony/http-kernel
+          --with symfony/console:6.4.49
+          --with symfony/finder:6.4.49
+          --with symfony/http-client:6.4.49
+          --with symfony/yaml:6.4.49
+          --with symfony/framework-bundle:6.4.49
+          --with symfony/http-kernel:6.4.49
 
       - name: PHPStan
         run: vendor/bin/phpstan analyse src --level=8
 
       - name: PHPUnit
-        run: vendor/bin/phpunit --coverage-text
-
-      - name: PHP CS Fixer
-        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+        run: vendor/bin/phpunit
 
   quality:
     name: Code Quality
@@ -55,15 +64,22 @@ jobs:
         with:
           php-version: '8.3'
           coverage: xdebug
+          tools: composer:v2
 
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction
+      - name: Validate composer.json and composer.lock
+        run: composer validate --strict
+
+      - name: Install dependencies from lock file
+        run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: PHPStan level 8
         run: vendor/bin/phpstan analyse src --level=8
 
       - name: PHPUnit with coverage
         run: vendor/bin/phpunit --coverage-clover=coverage.xml --coverage-text
+
+      - name: Coverage threshold (80 %)
+        run: php .github/scripts/check-coverage.php coverage.xml 80
 
       - name: PHP CS Fixer
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
