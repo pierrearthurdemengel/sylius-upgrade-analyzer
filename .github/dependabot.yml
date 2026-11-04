@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Dépendances réelles de l'outil : mises à jour groupées chaque semaine.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      composer:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Les fixtures reproduisent volontairement des projets Sylius 1.x anciens : les
+  # mettre à jour fausserait les tests. Elles ne sont jamais installées ni déployées.
+  - package-ecosystem: composer
+    directories:
+      - /tests/Fixtures/*
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
