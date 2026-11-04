@@ -6,7 +6,9 @@
     "authors": [
         {
             "name": "Pierre-Arthur Demengel",
-            "email": "pierrearthur.demengel@gmail.com"
+            "email": "pierrearthur.demengel@gmail.com",
+            "homepage": "https://creation-site-pro.fr/",
+            "role": "Developer"
         }
     ],
     "keywords": [
@@ -17,8 +19,14 @@
         "static-analysis",
         "php"
     ],
+    "homepage": "https://creation-site-pro.fr/en/sylius-2-upgrade?utm_source=analyzer-packagist",
+    "support": {
+        "issues": "https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer/issues",
+        "source": "https://github.com/pierrearthurdemengel/sylius-upgrade-analyzer"
+    },
     "require": {
         "php": ">=8.2",
+        "ext-dom": "*",
         "nikic/php-parser": "^5.0",
         "symfony/console": "^6.4|^7.2",
         "symfony/finder": "^6.4|^7.2",
