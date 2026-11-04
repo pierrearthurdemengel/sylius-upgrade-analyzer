@@ -32,6 +32,15 @@ final class PdfRenderer
      */
     public function render(string $html): string
     {
+        // dompdf s'appuie sur realpath(), sans effet sur les chemins phar:// : il ne peut pas
+        // fonctionner depuis l'archive autonome, qui oriente donc vers l'image Docker.
+        if (\Phar::running() !== '') {
+            throw new PdfGenerationException(
+                'Le format PDF n\'est pas disponible depuis l\'archive PHAR. Utilisez l\'image Docker '
+                . '(ghcr.io/pierrearthurdemengel/sylius-upgrade-analyzer) ou une installation Composer.',
+            );
+        }
+
         if (!$this->isAvailable()) {
             throw new PdfGenerationException(
                 'La génération PDF nécessite dompdf. Installez-le avec : composer require --dev dompdf/dompdf',
@@ -43,6 +52,9 @@ final class PdfRenderer
         // Le rapport est entièrement autonome : aucune ressource distante ne doit être chargée.
         $options->setIsRemoteEnabled(false);
         $options->setIsPhpEnabled(false);
+        // Dans l'archive PHAR et l'image Docker, le dossier de dompdf est en lecture seule :
+        // le cache des metriques de polices est donc ecrit dans le repertoire temporaire.
+        $options->setFontCache($this->writableCacheDirectory());
 
         $dompdf = new Dompdf($options);
         $dompdf->setPaper('A4', 'portrait');
@@ -62,6 +74,19 @@ final class PdfRenderer
         }
 
         return $pdf;
+    }
+
+    /**
+     * Retourne un repertoire inscriptible pour le cache de polices, cree au besoin.
+     */
+    private function writableCacheDirectory(): string
+    {
+        $directory = sys_get_temp_dir() . '/sylius-upgrade-analyzer-fonts';
+        if (!is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        return $directory;
     }
 
     /**

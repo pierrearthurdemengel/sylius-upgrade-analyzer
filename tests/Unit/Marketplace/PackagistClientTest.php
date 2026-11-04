@@ -469,4 +469,23 @@ final class PackagistClientTest extends TestCase
         self::assertSame(PluginCompatibilityStatus::UNKNOWN, $result->status);
         self::assertSame('Erreur lors de la requete vers Packagist : Syntax error', $result->notes);
     }
+
+    /**
+     * Verifie qu'un outil de developpement publie par un editeur Sylius, mais qui ne depend
+     * pas du coeur de Sylius (sylius-labs/coding-standard), n'est pas declare incompatible :
+     * la montee de version de Sylius ne le contraint pas.
+     */
+    #[Test]
+    public function testTreatsPackageNotDependingOnSyliusAsCompatible(): void
+    {
+        $client = $this->createClient($this->packageWithVersions([
+            'v4.4.0' => ['require' => ['php' => '^8.0', 'symplify/easy-coding-standard' => '^12.0']],
+            'v4.3.0' => ['require' => ['php' => '^7.4 || ^8.0', 'symplify/easy-coding-standard' => '^11.0']],
+        ]));
+
+        $result = $client->checkCompatibility('sylius-labs/coding-standard', '2.2');
+
+        self::assertSame(PluginCompatibilityStatus::COMPATIBLE, $result->status);
+        self::assertStringContainsString('ne depend pas du coeur de Sylius', $result->notes);
+    }
 }

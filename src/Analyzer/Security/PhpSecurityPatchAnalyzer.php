@@ -16,9 +16,13 @@ use Symfony\Component\Finder\Finder;
  *
  * L'outil ne voit pas le PHP de production : il lit la version que le projet declare
  * (plateforme composer.json, Dockerfile, fichiers compose, .php-version, .tool-versions).
- * Une version precise sous le correctif de sa branche, ou une branche sans support,
- * est bloquante ; une version sans numero de correctif (php:8.3-fpm) est signalee
- * pour verification, l'image ou le serveur reel pouvant etre a jour ou non.
+ * Seule une image Docker epinglee sur un correctif (php:8.3.10-fpm) decrit le PHP execute :
+ * sous le correctif de sa branche, ou sur une branche sans support, elle est bloquante.
+ * Les autres declarations sont signalees pour verification, sans alerte bloquante :
+ * config.platform.php fixe souvent un minimum pour resoudre les dependances,
+ * .php-version et .tool-versions decrivent le poste du developpeur, une image sans
+ * correctif (php:8.3-fpm) peut etre a jour, et les PHP des distributions recoivent
+ * les correctifs sans changer de numero.
  */
 final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
 {
@@ -35,8 +39,10 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
         '8.5' => '8.5.12',
     ];
 
-    /** Failles corrigees par les versions ci-dessus, citees dans les rapports */
-    private const ADVISORIES = 'CVE-2026-109618 et CVE-2026-109619 (execution de code a distance, exploitees)';
+    /** Failles corrigees par les versions ci-dessus, citees dans les rapports avec leurs avis officiels */
+    private const ADVISORIES = 'CVE-2026-109618 (https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w) '
+        . 'et CVE-2026-109619 (https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp), '
+        . 'execution de code a distance sans authentification, exploitees selon le catalogue KEV de la CISA (26/10/2026)';
 
     /** Plus ancienne branche encore corrigee par l'equipe PHP */
     private const OLDEST_SUPPORTED_BRANCH = '8.2';
@@ -47,7 +53,8 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     /** Verification de la version reellement deployee */
     private const MINUTES_PER_UNVERIFIED_RUNTIME = 15;
 
-    private const DOC_URL = 'https://www.php.net/ChangeLog-8.php';
+    /** Avis de securite de l'equipe PHP */
+    private const DOC_URL = 'https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w';
 
     /** Repertoires ignores lors de la recherche des fichiers Docker */
     private const EXCLUDED_DIRECTORIES = ['vendor', 'node_modules', 'var', 'public'];
@@ -75,7 +82,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     /**
      * Construit l'issue correspondant a une version declaree, ou null si elle est a jour.
      *
-     * @param array{version: string, source: string, file: string, line: int|null} $declaration
+     * @param array{version: string, source: string, file: string, line: int|null, pinned: bool} $declaration
      */
     private function evaluate(array $declaration): ?MigrationIssue
     {
@@ -87,7 +94,40 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
         $patch = $matches[3] ?? null;
         $version = $patch === null ? $branch : $branch . '.' . $patch;
 
-        if (version_compare($branch, self::OLDEST_SUPPORTED_BRANCH, '<')) {
+        $firstPatched = self::FIRST_PATCHED_VERSIONS[$branch] ?? null;
+        $unsupported = version_compare($branch, self::OLDEST_SUPPORTED_BRANCH, '<');
+        if (!$unsupported && $firstPatched === null) {
+            /* Branche plus recente que la table : aucune faille connue a signaler */
+            return null;
+        }
+
+        if ($patch !== null && !$unsupported && version_compare($version, $firstPatched, '>=')) {
+            return null;
+        }
+
+        $required = $firstPatched ?? self::FIRST_PATCHED_VERSIONS[self::OLDEST_SUPPORTED_BRANCH];
+
+        /* Une image sur une branche sans support est vulnerable quel que soit son correctif */
+        if (!$declaration['pinned'] || ($patch === null && !$unsupported)) {
+            return $this->createIssue(
+                $declaration,
+                Severity::SUGGESTION,
+                sprintf('PHP %s declare (%s) : verifier que le PHP execute est >= %s', $version, $declaration['source'], $required),
+                sprintf(
+                    'Cette declaration ne prouve pas la version executee en production. Les versions anterieures a PHP %s sont exposees a %s.',
+                    $required,
+                    self::ADVISORIES,
+                ),
+                sprintf(
+                    'Verifier la version reellement deployee (php -v sur le serveur) ; pour une image Docker, la reconstruire avec --pull, '
+                    . 'ou epingler PHP %s ou plus recent.',
+                    $required,
+                ),
+                self::MINUTES_PER_UNVERIFIED_RUNTIME,
+            );
+        }
+
+        if ($unsupported) {
             return $this->createIssue(
                 $declaration,
                 Severity::BREAKING,
@@ -104,35 +144,6 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
             );
         }
 
-        $firstPatched = self::FIRST_PATCHED_VERSIONS[$branch] ?? null;
-        if ($firstPatched === null) {
-            /* Branche plus recente que la table : aucune faille connue a signaler */
-            return null;
-        }
-
-        if ($patch === null) {
-            return $this->createIssue(
-                $declaration,
-                Severity::SUGGESTION,
-                sprintf('PHP %s declare (%s) sans version de correctif : verifier >= %s', $version, $declaration['source'], $firstPatched),
-                sprintf(
-                    'La declaration ne precise pas le correctif. Les versions anterieures a PHP %s sont exposees a %s.',
-                    $firstPatched,
-                    self::ADVISORIES,
-                ),
-                sprintf(
-                    'Verifier la version reellement deployee (php -v) ; pour une image Docker, la reconstruire avec --pull, '
-                    . 'ou epingler PHP %s ou plus recent.',
-                    $firstPatched,
-                ),
-                self::MINUTES_PER_UNVERIFIED_RUNTIME,
-            );
-        }
-
-        if (version_compare($version, $firstPatched, '>=')) {
-            return null;
-        }
-
         return $this->createIssue(
             $declaration,
             Severity::BREAKING,
@@ -144,7 +155,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * @param array{version: string, source: string, file: string, line: int|null} $declaration
+     * @param array{version: string, source: string, file: string, line: int|null, pinned: bool} $declaration
      */
     private function createIssue(
         array $declaration,
@@ -171,7 +182,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     /**
      * Rassemble les versions de PHP declarees par le projet, sans doublon par fichier.
      *
-     * @return list<array{version: string, source: string, file: string, line: int|null}>
+     * @return list<array{version: string, source: string, file: string, line: int|null, pinned: bool}>
      */
     private function collectDeclaredVersions(string $projectPath): array
     {
@@ -192,7 +203,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     /**
      * Version imposee par config.platform.php, qui reflete generalement le PHP de production.
      *
-     * @return list<array{version: string, source: string, file: string, line: int|null}>
+     * @return list<array{version: string, source: string, file: string, line: int|null, pinned: bool}>
      */
     private function fromComposerPlatform(string $projectPath): array
     {
@@ -207,13 +218,13 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
             return [];
         }
 
-        return [['version' => $version, 'source' => 'composer.json config.platform', 'file' => $file, 'line' => null]];
+        return [['version' => $version, 'source' => 'composer.json config.platform', 'file' => $file, 'line' => null, 'pinned' => false]];
     }
 
     /**
      * Versions declarees pour les gestionnaires de versions (Symfony CLI, phpenv, asdf, mise).
      *
-     * @return list<array{version: string, source: string, file: string, line: int|null}>
+     * @return list<array{version: string, source: string, file: string, line: int|null, pinned: bool}>
      */
     private function fromVersionFiles(string $projectPath): array
     {
@@ -223,7 +234,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
         if (is_file($phpVersionFile)) {
             $version = trim((string) strtok((string) file_get_contents($phpVersionFile), "\n"));
             if ($version !== '') {
-                $declarations[] = ['version' => $version, 'source' => '.php-version', 'file' => $phpVersionFile, 'line' => 1];
+                $declarations[] = ['version' => $version, 'source' => '.php-version', 'file' => $phpVersionFile, 'line' => 1, 'pinned' => false];
             }
         }
 
@@ -231,7 +242,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
         if (is_file($toolVersionsFile)) {
             foreach (file($toolVersionsFile, \FILE_IGNORE_NEW_LINES) ?: [] as $index => $line) {
                 if (preg_match('/^\s*php\s+(\S+)/', $line, $matches) === 1) {
-                    $declarations[] = ['version' => $matches[1], 'source' => '.tool-versions', 'file' => $toolVersionsFile, 'line' => $index + 1];
+                    $declarations[] = ['version' => $matches[1], 'source' => '.tool-versions', 'file' => $toolVersionsFile, 'line' => $index + 1, 'pinned' => false];
                 }
             }
         }
@@ -242,7 +253,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
     /**
      * Versions des images PHP utilisees par les Dockerfile et fichiers compose du projet.
      *
-     * @return list<array{version: string, source: string, file: string, line: int|null}>
+     * @return list<array{version: string, source: string, file: string, line: int|null, pinned: bool}>
      */
     private function fromDockerFiles(string $projectPath): array
     {
@@ -283,6 +294,7 @@ final class PhpSecurityPatchAnalyzer implements AnalyzerInterface
                         'source' => 'image ' . $this->resolveArguments($matches[1], $arguments),
                         'file' => $filePath,
                         'line' => $index + 1,
+                        'pinned' => true,
                     ];
                 }
             }

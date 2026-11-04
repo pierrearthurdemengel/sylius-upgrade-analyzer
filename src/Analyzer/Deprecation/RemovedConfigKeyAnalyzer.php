@@ -10,6 +10,7 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Analyseur des cles de configuration supprimees dans Sylius 2.0.
@@ -55,10 +56,8 @@ final class RemovedConfigKeyAnalyzer implements AnalyzerInterface
 
         foreach ($finder as $file) {
             $content = (string) file_get_contents((string) $file->getRealPath());
-            foreach (self::REMOVED_CONFIG_KEYS as $key => $description) {
-                /* Extraction de la cle racine pour la recherche rapide */
-                $searchKey = $this->extractSearchToken($key);
-                if (str_contains($content, $searchKey)) {
+            foreach (array_keys(self::REMOVED_CONFIG_KEYS) as $key) {
+                if (str_contains($content, $this->extractSearchToken($key))) {
                     return true;
                 }
             }
@@ -126,52 +125,52 @@ final class RemovedConfigKeyAnalyzer implements AnalyzerInterface
 
             $content = (string) file_get_contents($filePath);
 
+            try {
+                $config = Yaml::parse($content, Yaml::PARSE_CUSTOM_TAGS);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!is_array($config)) {
+                continue;
+            }
+
+            $lines = explode("\n", $content);
+
             foreach (self::REMOVED_CONFIG_KEYS as $key => $description) {
-                $searchKey = $this->extractSearchToken($key);
-                if (!str_contains($content, $searchKey)) {
+                if (!$this->isUsed($key, $config, $content)) {
                     continue;
                 }
 
-                /* Verification plus precise en parcourant les lignes */
-                $lines = explode("\n", $content);
-                foreach ($lines as $index => $line) {
-                    if (!str_contains($line, $searchKey)) {
-                        continue;
-                    }
+                $count++;
+                $lineNumber = $this->findLine($key, $lines);
 
-                    $count++;
-                    $lineNumber = $index + 1;
-
-                    $report->addIssue(new MigrationIssue(
-                        severity: Severity::BREAKING,
-                        category: Category::DEPRECATION,
-                        analyzer: $this->getName(),
-                        message: sprintf(
-                            'Cle de configuration supprimee "%s" dans %s',
-                            $key,
-                            $file->getRelativePathname(),
-                        ),
-                        detail: sprintf(
-                            'Le fichier %s utilise la cle "%s" ligne %d. %s.',
-                            $file->getRelativePathname(),
-                            $key,
-                            $lineNumber,
-                            $description,
-                        ),
-                        suggestion: sprintf(
-                            'Supprimer la cle "%s" de la configuration. %s.',
-                            $key,
-                            $description,
-                        ),
-                        file: $filePath,
-                        line: $lineNumber,
-                        codeSnippet: trim($line),
-                        docUrl: self::DOC_URL,
-                    ));
-
-                    /* Une seule occurrence par cle et par fichier suffit */
-                    break;
-                }
+                $report->addIssue(new MigrationIssue(
+                    severity: Severity::BREAKING,
+                    category: Category::DEPRECATION,
+                    analyzer: $this->getName(),
+                    message: sprintf(
+                        'Cle de configuration supprimee "%s" dans %s',
+                        $key,
+                        $file->getRelativePathname(),
+                    ),
+                    detail: sprintf(
+                        'Le fichier %s utilise la cle "%s"%s. %s.',
+                        $file->getRelativePathname(),
+                        $key,
+                        $lineNumber !== null ? sprintf(' ligne %d', $lineNumber) : '',
+                        $description,
+                    ),
+                    suggestion: sprintf(
+                        'Supprimer la cle "%s" de la configuration. %s.',
+                        $key,
+                        $description,
+                    ),
+                    file: $filePath,
+                    line: $lineNumber,
+                    codeSnippet: $lineNumber !== null ? trim($lines[$lineNumber - 1]) : null,
+                    docUrl: self::DOC_URL,
+                ));
             }
         }
 
@@ -248,13 +247,99 @@ final class RemovedConfigKeyAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Extrait le dernier segment de la cle pour la recherche dans le contenu du fichier.
-     * Par exemple "sylius_core.autoconfigure_with_attributes" retourne "autoconfigure_with_attributes".
+     * Indique si le fichier utilise la cle supprimee.
+     *
+     * Deux sortes de cles coexistent : les parametres de conteneur (sylius.mailer.templates),
+     * ecrits en entier sous "parameters" ou references en %nom%, et les noeuds de configuration
+     * de bundle (sylius_core.state_machine), qui n'existent qu'a ce chemin exact de l'arbre YAML.
+     * Chercher seulement le dernier segment ("class", "templates") produisait des faux positifs
+     * sur des fichiers qui n'avaient rien a voir.
+     *
+     * @param array<mixed> $config
+     */
+    private function isUsed(string $key, array $config, string $content): bool
+    {
+        if ($this->isContainerParameter($key)) {
+            $parameters = $config['parameters'] ?? null;
+
+            return (is_array($parameters) && array_key_exists($key, $parameters))
+                || str_contains($content, '%' . $key . '%');
+        }
+
+        /* Symfony autorise la meme configuration dans des blocs when@<env> */
+        $roots = [$config];
+        foreach ($config as $rootKey => $value) {
+            if (is_string($rootKey) && str_starts_with($rootKey, 'when@') && is_array($value)) {
+                $roots[] = $value;
+            }
+        }
+
+        foreach ($roots as $node) {
+            foreach (explode('.', $key) as $segment) {
+                if (!is_array($node) || !array_key_exists($segment, $node)) {
+                    continue 2;
+                }
+                $node = $node[$segment];
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Retourne la ligne ou la cle apparait : nom complet pour un parametre ; pour un noeud,
+     * chaque segment est cherche a la suite du precedent, afin que sylius_order.x ne soit pas
+     * localise sur le x de sylius_core qui le precede dans le fichier.
+     *
+     * @param list<string> $lines
+     */
+    private function findLine(string $key, array $lines): ?int
+    {
+        if ($this->isContainerParameter($key)) {
+            foreach ($lines as $index => $line) {
+                if (str_contains($line, $key)) {
+                    return $index + 1;
+                }
+            }
+
+            return null;
+        }
+
+        $start = 0;
+        $line = null;
+        foreach (explode('.', $key) as $segment) {
+            $pattern = '/^\s*' . preg_quote($segment, '/') . '\s*:/';
+            $found = null;
+            for ($index = $start, $total = count($lines); $index < $total; $index++) {
+                if (preg_match($pattern, $lines[$index]) === 1) {
+                    $found = $index;
+                    break;
+                }
+            }
+
+            if ($found === null) {
+                return null;
+            }
+            $start = $found + 1;
+            $line = $found + 1;
+        }
+
+        return $line;
+    }
+
+    private function isContainerParameter(string $key): bool
+    {
+        return str_starts_with($key, 'sylius.');
+    }
+
+    /**
+     * Texte recherche pour le filtre rapide de supports() : le nom complet d'un parametre,
+     * ou la racine d'un noeud de bundle (sylius_core, sylius_api...).
      */
     private function extractSearchToken(string $key): string
     {
-        $parts = explode('.', $key);
-
-        return end($parts);
+        return $this->isContainerParameter($key) ? $key : explode('.', $key)[0];
     }
 }

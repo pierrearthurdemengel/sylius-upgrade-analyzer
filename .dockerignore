@@ -1,0 +1,11 @@
+vendor/
+.git/
+.github/workflows/
+.phpunit.cache/
+.php-cs-fixer.cache
+.playwright-mcp/
+coverage/
+tests/
+docs/
+*.json.bak
+rapport-*.json

@@ -79,19 +79,23 @@ final class PhpSecurityPatchAnalyzerTest extends TestCase
         self::assertStringContainsString('PHP 8.3.10', $issues[0]->getMessage());
         self::assertStringContainsString('8.3.36', $issues[0]->getMessage());
         self::assertStringContainsString('CVE-2026-109618', $issues[0]->getDetail());
+        self::assertStringContainsString('GHSA-w8hw-w9fx-j79w', $issues[0]->getDetail());
+        self::assertStringContainsString('GHSA-6wmf-4rv5-p3rp', $issues[0]->getDetail());
+        self::assertStringContainsString('KEV', $issues[0]->getDetail());
+        self::assertSame('https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w', $issues[0]->getDocUrl());
         self::assertSame(realpath($file), $issues[0]->getFile());
         self::assertSame(2, $issues[0]->getLine());
         self::assertSame(60, $issues[0]->getEstimatedMinutes());
     }
 
     /**
-     * Verifie la classification selon la version declaree.
+     * Verifie la classification selon la version d'une image Docker officielle.
      */
     #[Test]
     #[DataProvider('declaredVersions')]
     public function testClassifiesDeclaredVersion(string $version, ?Severity $expected): void
     {
-        $this->writeFile('.php-version', $version . "\n");
+        $this->writeFile('Dockerfile', 'FROM php:' . $version . "-fpm\n");
 
         $issues = $this->analyze();
 
@@ -116,7 +120,7 @@ final class PhpSecurityPatchAnalyzerTest extends TestCase
         yield 'branche 8.2 sous le correctif' => ['8.2.34', Severity::BREAKING];
         yield 'branche 8.5 sous le correctif' => ['8.5.11', Severity::BREAKING];
         yield 'branche sans support 8.1' => ['8.1.31', Severity::BREAKING];
-        yield 'branche sans support 7.4' => ['7.4', Severity::BREAKING];
+        yield 'branche sans support 7.4, sans correctif' => ['7.4', Severity::BREAKING];
         yield 'branche seule, a verifier' => ['8.3', Severity::SUGGESTION];
         yield 'branche future hors table' => ['8.6.0', null];
     }
@@ -131,7 +135,7 @@ final class PhpSecurityPatchAnalyzerTest extends TestCase
 
         self::assertCount(1, $issues);
         self::assertSame(Severity::SUGGESTION, $issues[0]->getSeverity());
-        self::assertStringContainsString('verifier >= 8.4.27', $issues[0]->getMessage());
+        self::assertStringContainsString('verifier que le PHP execute est >= 8.4.27', $issues[0]->getMessage());
         self::assertStringContainsString('--pull', $issues[0]->getSuggestion());
     }
 
@@ -179,8 +183,38 @@ final class PhpSecurityPatchAnalyzerTest extends TestCase
         $issues = $this->analyze();
 
         self::assertCount(1, $issues);
+        self::assertSame(Severity::SUGGESTION, $issues[0]->getSeverity());
         self::assertStringContainsString('composer.json config.platform', $issues[0]->getMessage());
         self::assertStringContainsString('8.2.35', $issues[0]->getMessage());
+    }
+
+    /**
+     * Verifie qu'une declaration qui ne decrit pas le PHP execute n'est jamais bloquante,
+     * meme sous le correctif ou sur une branche sans support.
+     */
+    #[Test]
+    #[DataProvider('unpinnedDeclarations')]
+    public function testOnlyAsksToVerifyDeclarationsThatDoNotDescribeTheRuntime(string $file, string $content): void
+    {
+        $this->writeFile($file, $content);
+
+        $issues = $this->analyze();
+
+        self::assertCount(1, $issues);
+        self::assertSame(Severity::SUGGESTION, $issues[0]->getSeverity());
+        self::assertStringContainsString('php -v', $issues[0]->getSuggestion());
+        self::assertStringContainsString('GHSA-w8hw-w9fx-j79w', $issues[0]->getDetail());
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unpinnedDeclarations(): iterable
+    {
+        yield 'minimum de resolution composer' => ['composer.json', '{"config":{"platform":{"php":"8.2.0"}}}'];
+        yield 'poste du developpeur' => ['.php-version', "8.3.10\n"];
+        yield 'asdf ou mise' => ['.tool-versions', "php 8.4.1\n"];
+        yield 'branche sans support dans composer' => ['composer.json', '{"config":{"platform":{"php":"8.1.31"}}}'];
     }
 
     /** Verifie que les images non PHP et les dependances de vendor/ sont ignorees. */

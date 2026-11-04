@@ -7,6 +7,30 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-04
+
+L'outil s'installe désormais sans toucher au projet audité et fonctionne quelle que soit la version de PHP de ce projet.
+
+### Added
+- Image Docker `ghcr.io/pierrearthurdemengel/sylius-upgrade-analyzer`, publiée à chaque version : PHP 8.3.36 embarqué, tous les formats dont le PDF, utilisateur non privilégié, images de base épinglées par empreinte
+- Archive PHAR autonome attachée à chaque release GitHub, avec son empreinte SHA-256 (PDF non disponible depuis le PHAR, qui oriente vers l'image Docker)
+- Installation globale documentée (`composer global require`)
+- Détection de la version de Sylius depuis la contrainte de `composer.json` lorsque le projet ne versionne pas son `composer.lock` (squelettes, plugins)
+- `docs/benchmarks.md` : résultats reproductibles sur Sylius-Standard 1.14, Sylius/InvoicingPlugin et BitBag SyliusWishlistPlugin
+- `SECURITY.md` : versions supportées et signalement privé des vulnérabilités
+- README : compatibilité explicite (« Supports every Sylius 1.x release, from 1.0 to 1.14 LTS »), fin du support de sécurité de Sylius 1.14 en décembre 2026, garanties des correctifs automatiques, section qualité et sécurité
+
+### Changed
+- `--fix` demande confirmation avant d'écrire dans un terminal interactif ; en CI (sans interaction), le comportement est inchangé
+- Le cache de polices de dompdf est écrit dans le répertoire temporaire du système
+
+### Fixed
+- `PhpSecurityPatchAnalyzer` : plus d'alerte bloquante sur une déclaration qui ne décrit pas le PHP exécuté (`config.platform.php`, `.php-version`, `.tool-versions`), signalée désormais pour vérification avec `php -v` ; seule une image Docker épinglée sur un correctif reste bloquante
+- `PhpSecurityPatchAnalyzer` : chaque alerte cite les avis officiels de l'équipe PHP (GHSA-w8hw-w9fx-j79w, GHSA-6wmf-4rv5-p3rp) et l'inscription au catalogue KEV de la CISA ; le lien de documentation mène à l'avis au lieu du journal des versions
+- `RemovedConfigKeyAnalyzer` ne cherchait que le dernier segment des clés : toute ligne `class:` ou `templates` était signalée comme paramètre supprimé (11 faux problèmes bloquants sur Sylius-Standard 1.14). Les clés sont désormais lues dans le YAML parsé, à leur chemin exact, y compris dans les blocs `when@env`, avec la bonne ligne
+- Les paquets publiés par un éditeur Sylius mais qui ne dépendent pas du cœur (`sylius-labs/coding-standard`, `sylius-labs/suite-tags-extension`) ne sont plus déclarés plugins incompatibles, estimés à 16 h chacun
+- Badges du README qui laissaient croire que le projet audité devait tourner en PHP 8.2 et Symfony 6.4
+
 ## [2.3.0] - 2026-11-04
 
 ### Added
