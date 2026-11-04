@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
@@ -23,8 +24,22 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class CustomFixtureAnalyzer implements AnalyzerInterface
 {
-    /** Estimation en minutes par suite de fixtures */
+    /**
+     * Estimation en minutes par suite de fixtures ou par classe de fixture Sylius.
+     * Les fixtures Doctrine pures ne sont pas comptees : DoctrineFixturesBundle
+     * n'est pas touche par la migration Sylius.
+     */
     private const MINUTES_PER_FIXTURE_SUITE = 120;
+
+    /**
+     * Espaces de noms des fixtures Sylius (FixtureInterface, AbstractFixture,
+     * AbstractResourceFixture et fixtures du coeur). Une classe qui en implemente
+     * ou en etend une depend du systeme sylius_fixtures.
+     */
+    private const SYLIUS_FIXTURE_NAMESPACES = [
+        'Sylius\\Bundle\\FixturesBundle\\Fixture\\',
+        'Sylius\\Bundle\\CoreBundle\\Fixture\\',
+    ];
 
     /** URL de la documentation de migration */
     private const DOC_URL = 'https://docs.sylius.com/migration-2.0';
@@ -58,16 +73,15 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
         $projectPath = $report->getProjectPath();
         $fixtureCount = 0;
 
-        /* Etape 1 : analyse des classes de fixtures dans src/DataFixtures/ */
-        $fixtureCount += $this->analyzeFixtureClasses($report, $projectPath);
-
-        /* Etape 2 : analyse de la configuration sylius_fixtures */
+        /* Etape 1 : analyse de la configuration sylius_fixtures */
         $fixtureCount += $this->analyzeFixtureConfiguration($report, $projectPath);
 
-        /* Etape 3 : detection des classes implementant FixtureInterface dans src/ */
+        /* Etape 2 : detection des fixtures Sylius dans tout src/, src/DataFixtures/ compris.
+           Un simple fichier de src/DataFixtures/ n'est plus compte : c'est le plus souvent
+           une fixture Doctrine, sans lien avec la migration. */
         $fixtureCount += $this->analyzeFixtureInterfaces($report, $projectPath);
 
-        /* Etape 4 : resume global */
+        /* Etape 3 : resume global */
         if ($fixtureCount > 0) {
             $report->addIssue(new MigrationIssue(
                 severity: Severity::WARNING,
@@ -88,49 +102,6 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Analyse les classes de fixtures dans src/DataFixtures/.
-     * Retourne le nombre de classes de fixtures detectees.
-     */
-    private function analyzeFixtureClasses(MigrationReport $report, string $projectPath): int
-    {
-        $fixturesDir = $projectPath . '/src/DataFixtures';
-        if (!is_dir($fixturesDir)) {
-            return 0;
-        }
-
-        $finder = new Finder();
-        $finder->files()->in($fixturesDir)->name('*.php');
-
-        $count = 0;
-
-        foreach ($finder as $file) {
-            $filePath = $file->getRealPath();
-            if ($filePath === false) {
-                continue;
-            }
-
-            $count++;
-            $report->addIssue(new MigrationIssue(
-                severity: Severity::WARNING,
-                category: Category::DEPRECATION,
-                analyzer: $this->getName(),
-                message: sprintf('Classe de fixture detectee : %s', $file->getRelativePathname()),
-                detail: sprintf(
-                    'Le fichier %s dans src/DataFixtures/ contient une fixture qui peut '
-                    . 'necessiter des adaptations pour Sylius 2.0.',
-                    $file->getRelativePathname(),
-                ),
-                suggestion: 'Verifier la compatibilite de cette fixture avec le nouveau '
-                    . 'systeme de fixtures de Sylius 2.0.',
-                file: $filePath,
-                docUrl: self::DOC_URL,
-            ));
-        }
-
-        return $count;
-    }
-
-    /**
      * Analyse la configuration sylius_fixtures dans config/packages/.
      * Retourne le nombre de suites de fixtures configurees.
      */
@@ -142,6 +113,10 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
         ];
 
         $count = 0;
+
+        /* Symfony charge a la fois le .yaml et le .yml et fusionne leurs suites :
+           une suite presente dans les deux fichiers n'existe qu'une fois. */
+        $seenSuites = [];
 
         foreach ($configFiles as $configFile) {
             if (!file_exists($configFile)) {
@@ -170,6 +145,11 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
             }
 
             foreach (array_keys($suites) as $suiteName) {
+                if (isset($seenSuites[$suiteName])) {
+                    continue;
+                }
+
+                $seenSuites[$suiteName] = true;
                 $count++;
                 $report->addIssue(new MigrationIssue(
                     severity: Severity::WARNING,
@@ -196,7 +176,8 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Detecte les classes implementant FixtureInterface de Sylius dans src/.
+     * Detecte les classes de src/ (src/DataFixtures/ compris) qui implementent ou etendent
+     * une fixture Sylius.
      * Retourne le nombre de classes detectees.
      */
     private function analyzeFixtureInterfaces(MigrationReport $report, string $projectPath): int
@@ -210,11 +191,6 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
         $finder = new Finder();
         $finder->files()->in($srcDir)->name('*.php');
 
-        /* Exclure src/DataFixtures/ deja traite */
-        if (is_dir($projectPath . '/src/DataFixtures')) {
-            $finder->exclude('DataFixtures');
-        }
-
         $count = 0;
 
         foreach ($finder as $file) {
@@ -225,8 +201,8 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
 
             $code = (string) file_get_contents($filePath);
 
-            /* Verification rapide */
-            if (!str_contains($code, 'FixtureInterface') && !str_contains($code, 'AbstractFixture')) {
+            /* Verification rapide : toute reference a une fixture Sylius passe par un espace de noms en "Fixture" */
+            if (!str_contains($code, 'Fixture')) {
                 continue;
             }
 
@@ -240,38 +216,31 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
                 continue;
             }
 
-            /* Visiteur pour detecter les classes implementant FixtureInterface ou etendant AbstractFixture */
-            $visitor = new class () extends NodeVisitorAbstract {
+            /* Visiteur pour detecter les classes implementant ou etendant une fixture Sylius.
+               Le NameResolver passe avant lui : les noms compares sont pleinement qualifies,
+               qu'ils soient importes, aliases ou ecrits en \Sylius\... sans use. */
+            $visitor = new class (self::SYLIUS_FIXTURE_NAMESPACES) extends NodeVisitorAbstract {
                 /** @var list<array{class: string, line: int, type: string}> */
                 public array $fixtures = [];
 
-                /** Indique si le fichier importe une interface/classe Sylius de fixtures */
-                private bool $importsSyliusFixture = false;
+                /**
+                 * @param list<string> $syliusFixtureNamespaces Espaces de noms des fixtures Sylius
+                 */
+                public function __construct(private readonly array $syliusFixtureNamespaces)
+                {
+                }
 
                 public function enterNode(Node $node): null
                 {
-                    /* Detection de l'import Sylius */
-                    if ($node instanceof Node\Stmt\Use_) {
-                        foreach ($node->uses as $use) {
-                            $fullName = $use->name->toString();
-                            if (str_contains($fullName, 'Sylius')
-                                && (str_contains($fullName, 'FixtureInterface')
-                                    || str_contains($fullName, 'AbstractFixture'))
-                            ) {
-                                $this->importsSyliusFixture = true;
-                            }
-                        }
-                    }
-
-                    if (!$node instanceof Node\Stmt\Class_ || !$this->importsSyliusFixture) {
+                    if (!$node instanceof Node\Stmt\Class_) {
                         return null;
                     }
 
                     $className = $node->name !== null ? $node->name->toString() : '(anonyme)';
 
-                    /* Detection des implementations de FixtureInterface */
+                    /* Detection des implementations d'une interface de fixture Sylius */
                     foreach ($node->implements as $interface) {
-                        if (str_contains($interface->toString(), 'FixtureInterface')) {
+                        if ($this->isSyliusFixture($interface->toString())) {
                             $this->fixtures[] = [
                                 'class' => $className,
                                 'line' => $node->getStartLine(),
@@ -280,8 +249,8 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
                         }
                     }
 
-                    /* Detection de l'heritage d'AbstractFixture */
-                    if ($node->extends !== null && str_contains($node->extends->toString(), 'AbstractFixture')) {
+                    /* Detection de l'heritage d'une classe de fixture Sylius */
+                    if ($node->extends !== null && $this->isSyliusFixture($node->extends->toString())) {
                         $this->fixtures[] = [
                             'class' => $className,
                             'line' => $node->getStartLine(),
@@ -291,9 +260,22 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
 
                     return null;
                 }
+
+                /** Indique si le nom pleinement qualifie appartient a un espace de noms de fixtures Sylius. */
+                private function isSyliusFixture(string $fullName): bool
+                {
+                    foreach ($this->syliusFixtureNamespaces as $namespace) {
+                        if (str_starts_with($fullName, $namespace)) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
             };
 
             $traverser = new NodeTraverser();
+            $traverser->addVisitor(new NameResolver());
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 
