@@ -7,6 +7,12 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-04
+
+### Added
+- Workflow hebdomadaire qui ouvre une issue lorsque php.net publie une version de sécurité plus récente que la table de l'analyseur
+- `PhpSecurityPatchAnalyzer` et catégorie `security` : signale les versions de PHP déclarées par le projet (Dockerfile, compose, `config.platform.php`, `.php-version`, `.tool-versions`) sans le correctif de sécurité d'octobre 2026 (CVE-2026-109618 et CVE-2026-109619, exécution de code à distance exploitée), ainsi que les branches sans support
+
 ## [2.2.0] - 2026-11-04
 
 ### Security
