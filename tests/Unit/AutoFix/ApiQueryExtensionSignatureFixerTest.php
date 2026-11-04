@@ -79,8 +79,9 @@ final class ApiQueryExtensionSignatureFixerTest extends TestCase
 
         self::assertNotNull($fix);
         self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
-        self::assertStringContainsString('Operation $operation', $fix->fixedContent);
+        self::assertStringContainsString(', ?Operation $operation = null): void', $fix->fixedContent);
         self::assertStringNotContainsString('string $operationName', $fix->fixedContent);
+        self::assertStringContainsString("namespace App\\ApiExtension;\n\nuse ApiPlatform\\Metadata\\Operation;\n\nclass ProductExtension", $fix->fixedContent);
     }
 
     #[Test]

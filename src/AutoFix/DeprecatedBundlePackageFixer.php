@@ -59,12 +59,11 @@ final class DeprecatedBundlePackageFixer implements AutoFixInterface
         $fixedContent = $originalContent;
 
         foreach (self::DEPRECATED_PACKAGES as $package) {
-            /* Suppression de la ligne "vendor/package": "^x.y" avec la virgule eventuelle */
-            $pattern = '/\s*"' . preg_quote($package, '/') . '"\s*:\s*"[^"]*"\s*,?\s*\n/';
-            $fixedContent = (string) preg_replace($pattern, "\n", $fixedContent);
+            $fixedContent = $this->removePackageLine($fixedContent, $package);
         }
 
-        if ($fixedContent === $originalContent) {
+        /* Un composer.json invalide bloquerait toute commande Composer : dans le doute, aucun correctif */
+        if ($fixedContent === $originalContent || json_decode($fixedContent) === null) {
             return null;
         }
 
@@ -75,6 +74,29 @@ final class DeprecatedBundlePackageFixer implements AutoFixInterface
             fixedContent: $fixedContent,
             description: 'Suppression des paquets deprecies du composer.json.',
         );
+    }
+
+    /**
+     * Supprime la ligne "vendor/package": "^x.y" en conservant un JSON valide : quand le paquet
+     * etait la derniere entree de son objet, la virgule de l'entree precedente est retiree.
+     */
+    private function removePackageLine(string $content, string $package): string
+    {
+        $pattern = '/^[ \t]*"' . preg_quote($package, '/') . '"[ \t]*:[ \t]*"[^"]*"[ \t]*(,?)[ \t]*\r?\n/m';
+
+        if (preg_match($pattern, $content, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return $content;
+        }
+
+        $offset = $match[0][1];
+        $before = substr($content, 0, $offset);
+        $after = substr($content, $offset + \strlen($match[0][0]));
+
+        if ($match[1][0] === '') {
+            $before = (string) preg_replace('/,([ \t]*\r?\n)$/', '$1', $before);
+        }
+
+        return $before . $after;
     }
 
     private function resolveAbsolutePath(string $filePath, string $projectPath): string

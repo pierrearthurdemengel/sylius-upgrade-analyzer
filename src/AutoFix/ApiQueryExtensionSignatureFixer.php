@@ -48,10 +48,11 @@ final class ApiQueryExtensionSignatureFixer implements AutoFixInterface
         $originalContent = (string) file_get_contents($absolutePath);
         $fixedContent = $originalContent;
 
-        /* Remplacement du parametre string $operationName par Operation $operation */
+        /* Signature d'API Platform 3 : ?Operation $operation = null. Le type nullable explicite
+           evite la deprecation PHP 8.4 des parametres implicitement nullables. */
         $fixedContent = (string) preg_replace(
-            '/string\s+\$operationName/',
-            'Operation $operation',
+            '/\??string\s+\$operationName(?:\s*=\s*null)?/',
+            '?Operation $operation = null',
             $fixedContent,
         );
 
@@ -60,7 +61,7 @@ final class ApiQueryExtensionSignatureFixer implements AutoFixInterface
             && !str_contains($fixedContent, 'use ApiPlatform\\Metadata\\Operation')
         ) {
             $fixedContent = (string) preg_replace(
-                '/(namespace\s+[^;]+;\s*\n)/',
+                '/(namespace\s+[^;]+;[ \t]*\n)/',
                 "$1\nuse ApiPlatform\\Metadata\\Operation;\n",
                 $fixedContent,
                 1,

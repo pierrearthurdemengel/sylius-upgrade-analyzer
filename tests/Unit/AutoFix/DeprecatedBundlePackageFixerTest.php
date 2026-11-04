@@ -80,6 +80,22 @@ final class DeprecatedBundlePackageFixerTest extends TestCase
         self::assertSame(FixConfidence::HIGH, $fix->confidence);
         self::assertStringNotContainsString('friendsofsymfony/rest-bundle', $fix->fixedContent);
         self::assertStringContainsString('sylius/sylius', $fix->fixedContent);
+        self::assertSame(['require' => ['sylius/sylius' => '^1.12']], json_decode($fix->fixedContent, true));
+    }
+
+    #[Test]
+    public function testKeepsValidJsonWhenRemovingLastAndMiddleEntries(): void
+    {
+        $file = 'composer.json';
+        file_put_contents($this->tempDir . '/' . $file, "{\n    \"require\": {\n        \"php\": \"^8.2\",\n        \"jms/serializer-bundle\": \"^4.0\",\n        \"sylius/sylius\": \"^1.14\",\n        \"sylius/calendar\": \"^0.5\"\n    },\n    \"minimum-stability\": \"stable\"\n}\n");
+
+        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertSame(
+            ['require' => ['php' => '^8.2', 'sylius/sylius' => '^1.14'], 'minimum-stability' => 'stable'],
+            json_decode($fix->fixedContent, true),
+        );
     }
 
     #[Test]

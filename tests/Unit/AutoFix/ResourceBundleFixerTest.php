@@ -69,18 +69,31 @@ final class ResourceBundleFixerTest extends TestCase
     }
 
     #[Test]
-    public function testReplacesDoctrineOrmDriverFormat(): void
+    public function testLeavesDoctrineOrmDriverUntouched(): void
     {
+        /* "doctrine/orm" est toujours la valeur de SyliusResourceBundle::DRIVER_DOCTRINE_ORM
+           dans la version requise par Sylius 2 : la remplacer casserait la configuration. */
         $file = 'config/packages/sylius_resource.yaml';
         $filePath = $this->tempDir . '/' . $file;
         file_put_contents($filePath, "sylius_resource:\n    resources:\n        app.product:\n            driver: doctrine/orm\n");
 
         $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
 
+        self::assertNull($fix);
+    }
+
+    #[Test]
+    public function testCommentsMongodbDriver(): void
+    {
+        $file = 'config/packages/sylius_resource.yaml';
+        $filePath = $this->tempDir . '/' . $file;
+        file_put_contents($filePath, "sylius_resource:\n    resources:\n        app.review:\n            driver: doctrine/mongodb-odm\n");
+
+        $fix = $this->fixer->fix($this->createIssue($file), $this->tempDir);
+
         self::assertNotNull($fix);
         self::assertSame(FixConfidence::MEDIUM, $fix->confidence);
-        self::assertStringContainsString('driver: doctrine_orm', $fix->fixedContent);
-        self::assertStringNotContainsString('driver: doctrine/orm', $fix->fixedContent);
+        self::assertStringContainsString('# TODO: MongoDB supprime', $fix->fixedContent);
     }
 
     #[Test]
