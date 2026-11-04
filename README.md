@@ -16,7 +16,7 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 
 ## Features
 
-### 48 Built-in Analyzers
+### 49 Built-in Analyzers
 
 #### Templates & Frontend (6)
 
@@ -90,6 +90,12 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 46 | API Serialization Group | Missing `sylius:` prefix on serialization groups |
 | 47 | API Endpoint Restructure | 8+ restructured/removed API endpoint paths |
 | 48 | API Query Extension Signature | `$operationName` to `Operation $operation` parameter change |
+
+#### Security (1)
+
+| # | Analyzer | What it detects |
+|---|----------|-----------------|
+| 49 | PHP Security Patch | PHP versions declared by the project (Dockerfile, compose, `config.platform.php`, `.php-version`, `.tool-versions`) that miss a security release, e.g. the October 2026 remote code execution fixes (CVE-2026-109618, CVE-2026-109619) |
 
 ### 6 Output Reporters
 

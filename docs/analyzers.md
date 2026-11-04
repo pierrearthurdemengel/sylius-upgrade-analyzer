@@ -985,3 +985,23 @@ Direct container access to Sylius services (all now private by default):
 - `stripe/stripe-php` (Stripe gateway removed from core)
 
 ### Estimation: 60 minutes per package
+
+---
+
+## 47. PHP Security Patch
+
+**Class:** `PhpSecurityPatchAnalyzer`
+**Category:** Security
+**Severity:** BREAKING / SUGGESTION
+
+### What it detects
+
+The PHP version declared by the project, compared with the first patched release of each branch (October 2026 security release: CVE-2026-109618 and CVE-2026-109619, actively exploited remote code execution, fixed in 8.2.35, 8.3.36, 8.4.27 and 8.5.12):
+
+- `FROM php:8.3.10-fpm` in Dockerfiles, including versions passed through `ARG` and `FROM --platform=...`
+- PHP images in compose files, including FrankenPHP tags such as `dunglas/frankenphp:1.4-php8.3`
+- `config.platform.php` in `composer.json`, `.php-version`, `.tool-versions`
+
+A precise version below the fix, or a branch without security support (8.1 and older), is BREAKING. A declaration without patch level (`php:8.3-fpm`) is a SUGGESTION to verify the deployed version: the tool cannot see the production runtime.
+
+### Estimation: 60 minutes per vulnerable runtime, 15 minutes per runtime to verify
