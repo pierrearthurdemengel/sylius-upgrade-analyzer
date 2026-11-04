@@ -7,6 +7,10 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-04
+
+L'outil fonctionne désormais entièrement en local : toutes les dépendances au service hébergé ont été retirées et la génération PDF est intégrée à la CLI.
+
 ### Added
 - Format `pdf` généré entièrement en local (`--format=pdf`) : synthèse, facteurs de risque, feuille de route, problèmes bloquants détaillés, avertissements et suggestions. Repose sur `dompdf/dompdf`, proposé en dépendance optionnelle (`suggest`)
 - Option `--tjm` sur `sylius-upgrade:analyze` et `sylius-upgrade:multi-analyze` : estimation budgétaire sur une base de 7 h par jour, arrondie à la demi-journée supérieure
