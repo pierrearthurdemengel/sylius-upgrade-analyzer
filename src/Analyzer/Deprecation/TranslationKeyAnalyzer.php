@@ -118,7 +118,7 @@ final class TranslationKeyAnalyzer implements AnalyzerInterface
     private function analyzeYamlTranslationFile(MigrationReport $report, string $filePath, string $relativePath): int
     {
         try {
-            $translations = Yaml::parseFile($filePath);
+            $translations = Yaml::parseFile($filePath, Yaml::PARSE_CUSTOM_TAGS);
         } catch (\Throwable) {
             return 0;
         }

@@ -149,7 +149,7 @@ final class CustomFixtureAnalyzer implements AnalyzerInterface
             }
 
             try {
-                $config = Yaml::parseFile($configFile);
+                $config = Yaml::parseFile($configFile, Yaml::PARSE_CUSTOM_TAGS);
             } catch (\Throwable) {
                 continue;
             }

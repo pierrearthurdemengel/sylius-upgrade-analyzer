@@ -646,6 +646,27 @@ final class ResourceBundleAnalyzerTest extends TestCase
     }
 
     /**
+     * Verifie qu'une balise YAML personnalisee (!tagged_iterator, courante dans
+     * services.yaml) n'empeche plus l'analyse du reste du fichier.
+     */
+    #[Test]
+    public function testDetectsServiceOverrideInFileWithCustomYamlTags(): void
+    {
+        $this->writeProjectFile('config/services.yaml', <<<'YAML'
+            services:
+                App\Promotion\RuleRegistry:
+                    arguments: [!tagged_iterator app.promotion_rule]
+                sylius.repository.product:
+                    class: App\Repository\ProductRepository
+            YAML);
+        $report = $this->createTempReport();
+
+        (new ResourceBundleAnalyzer())->analyze($report);
+
+        self::assertCount(1, $this->issuesWithMessage($report, 'Surcharge de service Sylius detectee : sylius.repository.product'));
+    }
+
+    /**
      * Verifie la detection d'un decorateur de service Sylius (cle decorates).
      */
     #[Test]
