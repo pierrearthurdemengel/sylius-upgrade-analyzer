@@ -132,6 +132,7 @@ final class HtmlReportBuilder
             Category::RESOURCE => 'Ressources',
             Category::FRONTEND => 'Frontend',
             Category::API => 'API',
+            Category::SECURITY => 'Sécurité',
         };
     }
 

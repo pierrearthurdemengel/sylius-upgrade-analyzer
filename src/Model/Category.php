@@ -29,4 +29,7 @@ enum Category: string
 
     /** Configuration et endpoints API */
     case API = 'api';
+
+    /** Environnement d'execution exposant le projet a une faille connue */
+    case SECURITY = 'security';
 }

@@ -1,0 +1,48 @@
+name: PHP security watch
+
+# Verifie chaque semaine si php.net a publie une version de securite plus recente que
+# la table de PhpSecurityPatchAnalyzer, et ouvre une issue pour la mettre a jour.
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    name: Compare with php.net security releases
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check PHP security releases
+        id: check
+        run: |
+          status=0
+          php .github/scripts/check-php-security-releases.php src/Analyzer/Security/PhpSecurityPatchAnalyzer.php > releases.txt || status=$?
+          cat releases.txt
+          if [ "$status" -eq 2 ]; then exit 1; fi
+          echo "outdated=$([ "$status" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Open an issue
+        if: steps.check.outputs.outdated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Nouvelle version de securite PHP : mettre a jour PhpSecurityPatchAnalyzer'
+        run: |
+          if gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq 'length' | grep -qx 0; then
+            {
+              echo "php.net a publie une version de securite plus recente que la table FIRST_PATCHED_VERSIONS :"
+              echo
+              cat releases.txt
+              echo
+              echo "Mettre a jour la table et les CVE citees dans src/Analyzer/Security/PhpSecurityPatchAnalyzer.php, puis publier une version."
+            } > body.md
+            gh issue create --title "$TITLE" --body-file body.md
+          else
+            echo "Une issue ouverte existe deja."
+          fi
