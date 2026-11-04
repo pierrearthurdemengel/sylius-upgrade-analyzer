@@ -10,7 +10,7 @@
         "swiftmailer/swiftmailer": "^6.3",
         "payum/core": "^1.7",
         "payum/payum-bundle": "^2.5",
-        "api-platform/core": "^2.7",
+        "api-platform/core": "^4.1",
         "bitbag/sylius-cms-plugin": "^4.0",
         "bitbag/sylius-wishlist-plugin": "^2.0",
         "bitbag/sylius-elasticsearch-plugin": "^1.0",
