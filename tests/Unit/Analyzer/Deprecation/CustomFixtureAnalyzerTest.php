@@ -638,4 +638,37 @@ PHP);
             static fn (MigrationIssue $issue): bool => str_contains($issue->getMessage(), $fragment),
         ));
     }
+
+    /**
+     * Verifie que l'analyse se declenche pour une fixture Sylius placee hors de
+     * src/DataFixtures/ et sans configuration sylius_fixtures.
+     */
+    #[Test]
+    public function testSupportsSyliusFixtureOutsideDataFixturesWithoutConfig(): void
+    {
+        $this->writeFile('src/Fixture/BrandFixture.php', <<<'PHP'
+<?php
+
+namespace App\Fixture;
+
+use Sylius\Bundle\CoreBundle\Fixture\AbstractResourceFixture;
+
+final class BrandFixture extends AbstractResourceFixture
+{
+}
+PHP);
+
+        self::assertTrue((new CustomFixtureAnalyzer())->supports($this->createReport()));
+    }
+
+    /**
+     * Verifie qu'un projet sans fixture Sylius ni configuration ne declenche pas l'analyse.
+     */
+    #[Test]
+    public function testDoesNotSupportProjectWithoutSyliusFixtures(): void
+    {
+        $this->writeFile('src/Service/BrandProvider.php', "<?php\n\nnamespace App\\Service;\n\nfinal class BrandProvider\n{\n}\n");
+
+        self::assertFalse((new CustomFixtureAnalyzer())->supports($this->createReport()));
+    }
 }
