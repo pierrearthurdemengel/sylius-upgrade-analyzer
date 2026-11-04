@@ -7,6 +7,46 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-04
+
+Chaque correctif automatique a été rejoué sur une entrée réelle et chaque règle confrontée aux sources de Sylius 1.14 et 2.0. Plusieurs règles produisaient un résultat faux : elles sont corrigées ou retirées.
+
+### Added
+- `--fix` affiche le patch complet avant de demander confirmation dans un terminal interactif
+- Option `--min-confidence=high|medium|low` : n'applique que les correctifs au moins aussi fiables que le niveau demandé (défaut `low`, comportement inchangé)
+- `docs/fixers.md` : niveau de confiance, effet et limites de chaque correctif
+- `docs/fixer-examples.md` : entrée et sortie réelles de chaque correctif, générées depuis `tests/Fixtures/fixer-examples.php` et rejouées par `FixerExamplesTest`
+- Analyseur `Order Processor Autoconfiguration` (remplace `Order Processor Priority`) : signale les order processors et cart contexts sans `#[AsOrderProcessor]` / `#[AsCartContext]` ni tag, que Sylius 2.0 n'enregistre plus par interface ; le correctif ajoute l'attribut
+- `Renamed Service ID` : contrôleurs boutique renommés (`contact`, `currency_switch`, `locale_switch`, `register_thank_you`), trouvés dans les routes de Sylius-Standard 1.14
+
+### Changed
+- `Payum` : SUGGESTION hors total d'heures au lieu de BREAKING. Sylius 2.0 conserve Payum (`payum/payum-bundle` requis) ; la dépendance n'est plus signalée et le conseil de la retirer est supprimé
+- `Admin Menu Event` : ne signale plus que les cinq menus admin supprimés en 2.0 ; `sylius.menu.admin.main` est inchangé
+- `Behat Context Deprecation` : signale le service supprimé `sylius.behat.api_security` ; les contextes `calendar`, `doctrine_orm`, `managing_orders` et `checkout` existent toujours en 2.0
+- `Shipping Calculator` : signale les références aux services renommés `sylius.shipping_calculator*` ; les interfaces et le tag sont identiques en 2.0
+- `Command Handler Rename` : signale les références aux espaces de noms `Message*` d'AdminBundle et CoreBundle renommés `Command*` ; le code du projet (`src/Message/`) n'est plus visé
+- `Renamed Service ID` et `Service Decorator` : seuls les renommages listés mot pour mot dans `UPGRADE-2.0.md` sont appliqués
+- `SwiftMailer` : niveau `low` en PHP (API différente) et `medium` en YAML
+- `Twig Hook` : niveau `medium`, le template du hook restant à créer
+- Variables Payment Request : valeurs `sync://` de `UPGRADE-2.0.md` au lieu de `doctrine://default`
+
+### Removed
+- Correctif `Payum` : il commentait toute la configuration Payum, toujours supportée par Sylius 2.0
+- Correctif `Admin Menu Event` : il renommait `sylius.menu.admin.main`, inchangé en 2.0
+- Correctif `Behat Context` : il remplaçait les contextes `calendar` par des contextes `clock` inexistants
+- Correctif `Grid Customization` : il réécrivait `driver: doctrine/orm`, valeur toujours correcte, et toutes les clés `field:`
+
+### Fixed
+- `Deprecated Bundle Package` laissait une virgule finale et rendait `composer.json` invalide
+- `SwiftMailer` produisait un YAML où les options restaient hors de `framework.mailer`, et `new Email('Hello')`, appel invalide
+- `Twig Hook` générait un YAML mal indenté, ignoré par Sylius
+- `Removed Payment Gateway` ne commentait que la clé de la passerelle, rattachant `factory_name` à `gateways`
+- `Resource Bundle` remplaçait `doctrine/orm` par `doctrine_orm`, valeur invalide
+- `Renamed Service ID` renommait les commandes `sylius.console.command.*`, qui sont déjà les noms de Sylius 2.0
+- `API Serialization Group` ne traitait que quatre noms qui ne sont pas des groupes Sylius
+- `API Query Extension Signature` produisait un paramètre implicitement nullable, déprécié en PHP 8.4
+- README : un correctif commentait des imports PHP Payum, contrairement à la garantie « aucun code PHP de paiement modifié »
+
 ## [2.4.0] - 2026-11-04
 
 L'outil s'installe désormais sans toucher au projet audité et fonctionne quelle que soit la version de PHP de ce projet.
