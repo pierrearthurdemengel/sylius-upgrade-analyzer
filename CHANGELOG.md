@@ -9,15 +9,28 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [2.2.0] - 2026-11-04
 
+### Security
+- Mise à jour des composants Symfony (7.4.8 → derniers correctifs 7.4) corrigeant 10 alertes, dont CVE-2026-109413 (haute, récursion non bornée du parseur YAML, atteignable via les fichiers des projets audités)
+- Contrainte `symfony/yaml` relevée à `^6.4.45|^7.4.18` : une installation ne peut plus résoudre un parseur vulnérable
+- GitHub Action : entrées transmises aux scripts par variables d'environnement (plus d'interpolation dans `run:`), actions tierces épinglées sur SHA, commentaire de PR posté sans shell
+- CI : actions épinglées sur SHA, permissions du jeton limitées à la lecture, `composer audit` dans tous les jobs
+
 ### Added
 - Mention de l'offre d'accompagnement à la migration en fin de rapport console, Markdown et PDF (encart final). Les sorties JSON, SARIF et CSV n'en contiennent jamais
 - Option `--no-promo` sur `sylius-upgrade:analyze` et `sylius-upgrade:multi-analyze` pour retirer cette mention
 - `composer.json` : liens `homepage` et `support`, site de l'auteur
 
 ### Changed
+- GitHub Action : nouvelle entrée `analyzer-version` ; `jq` n'est plus requis
 - `composer.json` déclare l'extension `ext-dom`, utilisée pour lire les services XML
 
+### Removed
+- `action/entrypoint.sh`, inutilisé par l'action composite
+
 ### Fixed
+- GitHub Action inutilisable : elle appelait une commande `analyse` inexistante. Elle lance désormais `sylius-upgrade:analyze`, installe l'outil hors du projet audité, expose réellement ses sorties, publie SARIF et commentaire avant d'échouer sur les issues bloquantes, et prend en compte `target-version`
+- Commentaire de PR tronqué à 50 issues pour rester sous la limite de taille de GitHub, et non bloquant sur les PR issues de forks
+- Exemple d'utilisation de l'action : référence `@v1` inexistante et permissions manquantes
 - `ResourceBundleAnalyzer` analyse aussi les projets dont la seule personnalisation est une surcharge de service Sylius (YAML ou XML)
 - `CustomFixtureAnalyzer` analyse aussi les fixtures Sylius placées hors de `src/DataFixtures/` sans configuration `sylius_fixtures`
 

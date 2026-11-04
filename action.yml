@@ -14,6 +14,10 @@ inputs:
     description: 'Version Sylius cible'
     required: false
     default: '2.2'
+  analyzer-version:
+    description: 'Contrainte Composer de la version de l outil a installer'
+    required: false
+    default: '^2.2'
   fail-on-breaking:
     description: 'Echouer si des issues BREAKING sont detectees'
     required: false
@@ -30,54 +34,96 @@ inputs:
 outputs:
   complexity:
     description: 'Niveau de complexite detecte'
+    value: ${{ steps.analyze.outputs.complexity }}
   total-hours:
     description: 'Heures estimees totales'
+    value: ${{ steps.analyze.outputs.total-hours }}
   breaking-count:
     description: 'Nombre d issues BREAKING'
+    value: ${{ steps.analyze.outputs.breaking-count }}
 
 runs:
   using: 'composite'
   steps:
+    # Actions tierces epinglees sur un SHA de commit : un tag peut etre deplace, pas un commit.
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
       with:
         php-version: '8.3'
+        coverage: none
+        tools: composer:v2
+
+    # L'outil est installe hors du projet analyse : un projet Sylius 1.x a ses propres
+    # contraintes (Symfony, php-parser) qui entreraient en conflit, et son composer.json
+    # ne doit pas etre modifie par l'audit.
     - name: Install analyzer
       shell: bash
-      run: composer require --dev pierre-arthur/sylius-upgrade-analyzer --no-interaction
-      working-directory: ${{ inputs.project-path }}
+      env:
+        ANALYZER_VERSION: ${{ inputs.analyzer-version }}
+      run: |
+        composer require --no-interaction --no-progress \
+          --working-dir="$RUNNER_TEMP/sylius-upgrade-analyzer" \
+          "pierre-arthur/sylius-upgrade-analyzer:$ANALYZER_VERSION"
+
+    # Les entrees passent par des variables d'environnement, jamais interpolees dans le
+    # script : une valeur contenant des caracteres shell ne peut pas injecter de commande.
     - name: Run analysis
       id: analyze
       shell: bash
+      env:
+        PROJECT_PATH: ${{ inputs.project-path }}
+        TARGET_VERSION: ${{ inputs.target-version }}
       run: |
-        vendor/bin/sylius-upgrade-analyzer analyse ${{ inputs.project-path }} --format=json --output=sylius-upgrade-report.json --no-marketplace
-        echo "complexity=$(jq -r '.summary.complexity' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
-        echo "total-hours=$(jq -r '.summary.total_hours' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
-        echo "breaking-count=$(jq -r '.summary.breaking_count' sylius-upgrade-report.json)" >> $GITHUB_OUTPUT
-      working-directory: ${{ inputs.project-path }}
+        ANALYZER="$RUNNER_TEMP/sylius-upgrade-analyzer/vendor/bin/sylius-upgrade-analyzer"
+        REPORT="$RUNNER_TEMP/sylius-upgrade-report.json"
+        # Le code 1 signale des issues BREAKING : il est traite par l'etape dediee,
+        # apres la publication des sorties, du SARIF et du commentaire.
+        status=0
+        "$ANALYZER" sylius-upgrade:analyze "$PROJECT_PATH" \
+          --target-version="$TARGET_VERSION" --format=json --output="$REPORT" --no-marketplace || status=$?
+        if [ ! -f "$REPORT" ]; then
+          echo "::error::L'analyse n'a produit aucun rapport (code $status)"
+          exit 1
+        fi
+        # Lecture du resume avec PHP, deja installe : jq n'est pas present sur tous les runners.
+        php -r '
+          $summary = json_decode((string) file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR)["summary"];
+          printf("complexity=%s\ntotal-hours=%s\nbreaking-count=%d\nreport=%s\n",
+            $summary["complexity"], $summary["total_hours"], $summary["breaking_count"], $argv[1]);
+        ' "$REPORT" >> "$GITHUB_OUTPUT"
+
     - name: Generate SARIF
       if: inputs.upload-sarif == 'true'
       shell: bash
-      run: vendor/bin/sylius-upgrade-analyzer analyse ${{ inputs.project-path }} --format=sarif --output=sylius-upgrade.sarif --no-marketplace
-      working-directory: ${{ inputs.project-path }}
+      env:
+        PROJECT_PATH: ${{ inputs.project-path }}
+        TARGET_VERSION: ${{ inputs.target-version }}
+      run: |
+        "$RUNNER_TEMP/sylius-upgrade-analyzer/vendor/bin/sylius-upgrade-analyzer" sylius-upgrade:analyze "$PROJECT_PATH" \
+          --target-version="$TARGET_VERSION" --format=sarif --output="$RUNNER_TEMP/sylius-upgrade.sarif" --no-marketplace || true
+        test -f "$RUNNER_TEMP/sylius-upgrade.sarif"
+
     - name: Upload SARIF
       if: inputs.upload-sarif == 'true'
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
       with:
-        sarif_file: ${{ inputs.project-path }}/sylius-upgrade.sarif
+        sarif_file: ${{ runner.temp }}/sylius-upgrade.sarif
+
     - name: Post PR comment
       if: inputs.post-pr-comment == 'true' && github.event_name == 'pull_request'
       shell: bash
-      run: |
-        node ${{ github.action_path }}/action/post-comment.js
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        REPORT_FILE: ${{ inputs.project-path }}/sylius-upgrade-report.json
+        REPORT_FILE: ${{ steps.analyze.outputs.report }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: node "$ACTION_PATH/action/post-comment.js"
+
     - name: Check for breaking issues
       if: inputs.fail-on-breaking == 'true'
       shell: bash
+      env:
+        BREAKING: ${{ steps.analyze.outputs.breaking-count }}
       run: |
-        BREAKING=$(jq -r '.summary.breaking_count' ${{ inputs.project-path }}/sylius-upgrade-report.json)
         if [ "$BREAKING" != "0" ]; then
           echo "::error::$BREAKING breaking issues detected"
           exit 1

@@ -357,13 +357,18 @@ Add the analyzer to your CI workflow:
 name: Sylius Migration Audit
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  security-events: write   # required by upload-sarif
+  pull-requests: write     # required by post-pr-comment
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pierrearthurdemengel/sylius-upgrade-analyzer@v1
+      - uses: pierrearthurdemengel/sylius-upgrade-analyzer@v2.2.0
         with:
           project-path: '.'
           target-version: '2.2'
@@ -378,9 +383,12 @@ jobs:
 |-------|---------|-------------|
 | `project-path` | `.` | Path to the Sylius project |
 | `target-version` | `2.2` | Target Sylius version |
+| `analyzer-version` | `^2.2` | Composer constraint of the analyzer version to install |
 | `fail-on-breaking` | `true` | Fail the job if breaking issues are found |
 | `upload-sarif` | `false` | Upload SARIF report to GitHub Code Scanning |
-| `post-pr-comment` | `false` | Post a summary comment on the PR |
+| `post-pr-comment` | `false` | Post a summary comment on the PR (lists up to 50 breaking issues; skipped with a warning on read-only fork tokens) |
+
+The analyzer is installed in the runner's temporary directory, so your project's `composer.json` and dependencies are left untouched.
 
 ### Action Outputs
 
