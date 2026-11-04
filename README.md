@@ -9,7 +9,7 @@
 
 **Automated migration audit & auto-fix CLI for Sylius 1.x to 2.x projects.**
 
-Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every** breaking change, deprecated API, and incompatible pattern, then produces a detailed migration report with time estimates, fix suggestions, and **41 automatic corrections** covering the most common migration tasks.
+Sylius Upgrade Analyzer scans your existing Sylius 1.x project, detects **every** breaking change, deprecated API, and incompatible pattern, then produces a detailed migration report with time estimates, fix suggestions, and **37 automatic corrections** covering the most common migration tasks.
 
 Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/Sylius/blob/2.0/UPGRADE-2.0.md), [UPGRADE-API-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/UPGRADE-API-2.0.md), and [CHANGELOG-2.0.md](https://github.com/Sylius/Sylius/blob/2.1/CHANGELOG-2.0.md). Nothing is left unchecked.
 
@@ -45,18 +45,18 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 | 7 | Winzou State Machine | winzou/state-machine-bundle to Symfony Workflow |
 | 8 | SwiftMailer | swiftmailer/swiftmailer to symfony/mailer |
 | 9 | User Encoder | `security.encoders` and `getSalt()` methods |
-| 10 | Payum | Payum gateway to Payment Requests |
+| 10 | Payum | Payum gateways convertible to Payment Requests (optional: Payum is still supported, not counted in the effort) |
 | 11 | Message Bus Rename | `sylius_default.bus` / `sylius_event.bus` renames |
-| 12 | Command Handler Rename | `src/Message/` to `src/Command/` |
+| 12 | Command Handler Rename | References to Sylius `Message*` namespaces renamed `Command*` |
 | 13 | Deprecated Email Manager | Removed OrderEmailManager / ContactEmailManager |
 | 14 | Removed Payment Gateway | Stripe / PayPal Express removed from core |
 | 15 | Service Decorator | Decorators targeting renamed Sylius services |
-| 16 | Order Processor Priority | Priority conflicts (40-60 range) |
+| 16 | Order Processor Autoconfiguration | Order processors and cart contexts no longer registered through their interface |
 | 17 | Removed Form Type Extension | Classes and services built on form extensions removed from Sylius core |
-| 18 | Behat Context Deprecation | 10+ deprecated Behat contexts |
-| 19 | Admin Menu Event | Event-based admin menu system changes |
+| 18 | Behat Context Deprecation | Removed `sylius.behat.api_security` service |
+| 19 | Admin Menu Event | Listeners on the five admin menus removed in 2.0 |
 | 20 | Promotion Rule Checker | PromotionRuleCheckerInterface changes |
-| 21 | Shipping Calculator | CalculatorInterface changes |
+| 21 | Shipping Calculator | References to the renamed core shipping calculator services |
 | 22 | Doctrine XML Mapping | `*.orm.xml` to PHP attribute migration |
 | 23 | Custom Fixture | Fixture system changes |
 | 24 | Multi-Store Channel | Removed `findOneByHostname()`, custom channel and locale contexts |
@@ -115,51 +115,49 @@ Coverage is built from the official [UPGRADE-2.0.md](https://github.com/Sylius/S
 - **Markdown** -- Human-readable report with tables, suitable for PRs and wikis
 - **PDF** -- Stakeholder report generated locally: executive summary, risk factors, roadmap, budget estimate (`--tjm`) and detailed issues (requires `dompdf/dompdf`)
 
-### 41 Auto-Fixers
+### 37 Auto-Fixers
 
 | Fixer | Confidence | What it fixes |
-|-------|:----------:|---------------|
-| Twig Hook Fixer | HIGH | Generates `sylius_twig_hooks` YAML config for template overrides |
-| Workflow Migration Fixer | MEDIUM | Converts winzou state machine YAML to Symfony Workflow config |
-| Security Config Fixer | HIGH | Replaces `security.encoders` with `security.password_hashers` and simplifies `getSalt()` |
+|-------|------------|---------------|
+| API Endpoint Restructure Fixer | HIGH | Replaces 3 API endpoint paths renamed in `UPGRADE-API-2.0.md` |
+| Bundle Configuration Fixer | HIGH | Removes bundles dropped by Sylius 2.0 and adds the new ones in `bundles.php` |
+| Calendar to Clock Fixer | HIGH | `DateTimeProviderInterface` → `ClockInterface`, `sylius/calendar` → `symfony/clock` |
+| Class Move Fixer | HIGH | Updates FQCN references of classes moved between Sylius bundles |
+| Command Handler Rename Fixer | HIGH | Sylius `Message*` namespaces → `Command*` (your own code is not renamed) |
+| Deprecated Bundle Package Fixer | HIGH | Removes deprecated packages from `composer.json`, keeping the JSON valid |
+| Grid Filter Entity Fixer | HIGH | `type: entities` → `type: entity` in grid YAML |
+| LiipImagine Config Fixer | HIGH | Resolver/loader `default` → `sylius_image` |
 | Message Bus Fixer | HIGH | Renames bus references in YAML and PHP files |
-| Command Handler Fixer | HIGH | Updates namespaces from `Message\` to `Command\` |
-| SwiftMailer Fixer | HIGH | Converts `Swift_Message` to `Email`, `Swift_Attachment` to `DataPart`, updates YAML config |
-| Renamed Service ID Fixer | HIGH | Replaces 11 old Sylius service IDs + 2 prefix renames in YAML |
+| Multi-Store Channel Fixer | HIGH | `findOneByHostname()` → `findOneEnabledByHostname()` |
+| Order Processor Autoconfiguration Fixer | HIGH | Adds `#[AsOrderProcessor]` / `#[AsCartContext]` (priority 0, as in 1.x) |
+| Payment Request Env Fixer | HIGH | Adds the 2 Messenger transport variables of `UPGRADE-2.0.md` to `.env` |
+| Removed Config Key Fixer | HIGH | Comments out removed YAML config keys with TODO markers |
+| Renamed Service ID Fixer | HIGH | Renames service IDs listed word for word in the `UPGRADE-2.0.md` tables |
+| Routing Import Fixer | HIGH | Replaces old routing imports and renamed `new_api_*` parameters |
+| Security Config Fixer | HIGH | Generates the `security.password_hashers` configuration |
 | Security Firewall Fixer | HIGH | Renames `new_api_admin_user` → `api_admin`, `new_api_shop_user` → `api_shop` |
-| LiipImagine Config Fixer | HIGH | Replaces resolver/loader `"default"` with `"sylius_image"` |
-| Sonata Block Event Fixer | MEDIUM | Replaces `sonata_block_render_event()` / `sylius_template_event()` with `hook()` |
-| Grid Filter Entity Fixer | HIGH | Replaces `type: entities` with `type: entity` in grid YAML |
+| Shipping Calculator Fixer | HIGH | Renames references to `sylius.shipping_calculator*` services (the tag is unchanged) |
 | Use Webpack Config Fixer | HIGH | Removes `use_webpack` from `sylius_ui` YAML config and Twig conditionals |
-| Calendar to Clock Fixer | HIGH | Replaces `DateTimeProviderInterface` → `ClockInterface`, `sylius/calendar` → `symfony/clock` |
-| Class Move Fixer | HIGH | Updates 9 moved FQCN references between Sylius bundles |
-| Removed Class Fixer | MEDIUM | Comments out `use` statements for 150+ removed classes with TODO markers |
-| Bundle Config Fixer | HIGH | Removes 7 deprecated bundles and adds 5 required new bundles in `bundles.php` |
-| Deprecated Bundle Package Fixer | HIGH | Removes 6 deprecated packages from `composer.json` |
-| User Encoder Fixer | HIGH | YAML: `encoders` → `password_hashers` + algorithm; PHP: `getSalt()` → `return null` |
-| API Endpoint Restructure Fixer | HIGH | Replaces 3 restructured API endpoint paths |
-| Removed Route Fixer | MEDIUM | Comments removed route references in PHP and Twig with TODO markers |
-| Payment Request Env Fixer | HIGH | Adds 2 required Messenger transport env vars to `.env` |
-| Routing Import Fixer | HIGH | Replaces 7 old routing imports and parameter names |
-| Removed Config Key Fixer | HIGH | Comments 7 removed YAML config keys with TODO markers |
-| Behat Context Fixer | MEDIUM | Renames deprecated Behat context classes |
-| API Serialization Group Fixer | MEDIUM | Adds `sylius:` prefix to 4 serialization group pairs |
-| API Query Extension Signature Fixer | MEDIUM | Updates `$operationName` → `Operation $operation` parameter + use statement |
-| Order Processor Priority Fixer | MEDIUM | Adds `priority` in YAML tags + `getPriority()` in PHP |
-| Deprecated Email Manager Fixer | MEDIUM | Replaces 4 deprecated email manager interface FQCNs |
-| Admin Menu Event Fixer | MEDIUM | Replaces 3 old admin menu event names |
-| Service Decorator Fixer | MEDIUM | Updates `decorates:` with renamed controller service prefixes |
-| Removed Payment Gateway Fixer | MEDIUM | Comments `stripe_checkout` and `paypal_express_checkout` configs |
-| Shipping Calculator Fixer | MEDIUM | Replaces `DelegatingCalculatorInterface` → `CalculatorInterface` |
+| User Encoder Fixer | HIGH / MEDIUM | YAML: `encoders` → `password_hashers` (high); PHP: `getSalt()` (medium) |
+| API Platform Migration Fixer | MEDIUM | `ApiPlatform\Core` → API Platform 3 namespaces |
+| API Query Extension Signature Fixer | MEDIUM | `string $operationName` → `?Operation $operation = null` + use statement |
+| API Serialization Group Fixer | MEDIUM | Adds the `sylius:` prefix to `admin:` and `shop:` serialization groups |
+| Constructor Signature Fixer | MEDIUM | Adds TODO markers on overridden constructors of changed Sylius classes |
+| Deprecated Email Manager Fixer | MEDIUM | Replaces email manager FQCNs moved to CoreBundle |
 | Promotion Rule Checker Fixer | MEDIUM | Moves `CartQuantityRuleChecker` from Promotion to Core namespace |
-| Payum Config Fixer | MEDIUM | Comments `payum:` YAML root key and Payum `use` statements in PHP |
-| Grid Customization Fixer | MEDIUM | Replaces `field:` → `fields:` + `doctrine/orm` → `doctrine_orm` |
-| Resource Bundle Fixer | MEDIUM | Replaces `doctrine/orm` driver format, comments PHPCR/MongoDB drivers |
-| API Platform Migration Fixer | MEDIUM | Updates 7 namespace replacements (Core → Metadata/Symfony) + annotation → attribute |
-| Multi-Store Channel Fixer | HIGH | Replaces `findOneByHostname()` with `findOneEnabledByHostname()` |
-| Constructor Signature Fixer | MEDIUM | Adds TODO markers on overridden constructors of 24 changed Sylius classes |
+| Removed Class Fixer | MEDIUM | Comments out `use` statements of removed classes with TODO markers |
+| Removed Payment Gateway Fixer | MEDIUM | Comments out the whole `stripe_checkout` / `paypal_express_checkout` YAML definition |
+| Removed Route Fixer | MEDIUM | Comments removed route references with TODO markers |
+| Resource Bundle Fixer | MEDIUM | Comments out PHPCR/MongoDB drivers (`doctrine/orm` is untouched) |
+| Service Decorator Fixer | MEDIUM | Renames `decorates:` targets listed in the `UPGRADE-2.0.md` tables |
+| Sonata Block Event Fixer | MEDIUM | `sonata_block_render_event()` / `sylius_template_event()` → `hook()` |
+| SwiftMailer Fixer | MEDIUM / LOW | YAML: `framework.mailer.dsn` (medium); PHP: class names only, calls to rewrite (low) |
+| Twig Hook Fixer | MEDIUM | Registers a Twig Hook for a template override (the hook template is yours to create) |
 | User Model Field Fixer | MEDIUM | Comments deprecated `locked`, `expiresAt`, `credentialsExpireAt` fields and `Serializable` |
+| Workflow Migration Fixer | MEDIUM | Converts winzou state machine YAML to Symfony Workflow config |
 | Doctrine XML Mapping Fixer | LOW | Adds TODO marker for `*.orm.xml` to PHP attribute conversion |
+
+Every fixer's real before/after output is in [docs/fixer-examples.md](docs/fixer-examples.md) (replayed by the test suite), and [docs/fixers.md](docs/fixers.md) explains each confidence level.
 
 ### GitHub Action
 
@@ -398,7 +396,7 @@ In `--dry-run` mode, the tool generates a unified diff patch showing what would 
 
 - **Nothing is written without your consent in a terminal**: `--fix` lists every change and asks for confirmation. In CI (non-interactive), `--fix` applies directly, as scripts expect. Run `--dry-run` first to review the patch.
 - **Files only**: no fixer connects to a database, runs a migration or executes a command. Every write goes through a single place (`FixEngine::applyFix()`), so every change is visible in your Git diff.
-- **Payment configuration is handled conservatively**: no fixer edits PHP payment code. Two `MEDIUM` fixers only comment out (never delete) obsolete Payum and removed-gateway YAML, and one adds the missing Payment Request environment variables to `.env`.
+- **Payment configuration is handled conservatively**: no fixer edits PHP payment code. One `MEDIUM` fixer comments out (never deletes) the removed Stripe Checkout and PayPal Express gateway YAML, and one adds the missing Payment Request environment variables to `.env`. Payum itself is left alone: Sylius 2.0 still supports it.
 - Run it on a clean Git working tree so that `git diff` and `git checkout .` remain your safety net.
 
 ---
@@ -580,9 +578,9 @@ The analyzer is run on public Sylius 1.x code bases to check its findings agains
 
 | Project | Sylius | Issues | Blocking | Estimated effort |
 |---------|--------|--------|----------|------------------|
-| [Sylius-Standard](https://github.com/Sylius/Sylius-Standard) (1.14 branch, official skeleton) | ~1.14.0 | 64 | 25 | 51.5 h |
+| [Sylius-Standard](https://github.com/Sylius/Sylius-Standard) (1.14 branch, official skeleton) | ~1.14.0 | 66 | 27 | 52.0 h |
 | [Sylius/InvoicingPlugin](https://github.com/Sylius/InvoicingPlugin) (1.0 branch) | ~1.13.0 \|\| ~1.14.0 | 30 | 6 | 38.5 h |
-| [BitBag SyliusWishlistPlugin](https://github.com/BitBagCommerce/SyliusWishlistPlugin) | ^1.13 \|\| ^1.14 | 17 | 2 | 18.5 h |
+| [BitBag SyliusWishlistPlugin](https://github.com/BitBagCommerce/SyliusWishlistPlugin) | ^1.13 \|\| ^1.14 | 13 | 2 | 15.5 h |
 
 Every blocking issue on these projects was reviewed by hand. Running these benchmarks already caught and fixed false positives (removed configuration keys, development tools reported as incompatible plugins).
 
@@ -590,7 +588,7 @@ Every blocking issue on these projects was reviewed by hand. Running these bench
 
 ## Quality and Safety
 
-- **Tests**: 890+ PHPUnit tests, line coverage of at least 80 % enforced in CI (the build fails below), PHPStan level 8, PHP CS Fixer.
+- **Tests**: 940+ PHPUnit tests, including one replayed before/after example per auto-fixer, line coverage of at least 80 % enforced in CI (the build fails below), PHPStan level 8, PHP CS Fixer.
 - **CI matrix**: PHP 8.2, 8.3 and 8.4, against Symfony 6.4 and 7.4, dependencies installed from `composer.lock`, `composer audit` in every job.
 - **Every detection is sourced**: checks are traced back to the official Sylius upgrade guides; checks that could not be traced back to a documented change have been removed (see [CHANGELOG.md](CHANGELOG.md)).
 - **Semantic versioning** and a maintained [CHANGELOG.md](CHANGELOG.md). Security issues: see [SECURITY.md](SECURITY.md).
