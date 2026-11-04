@@ -269,7 +269,7 @@ $fixEngine = new FixEngine($fixers);
 
 $reportLoader = new ReportLoader();
 
-$application = new Application('sylius-upgrade-analyzer', '2.3.1');
+$application = new Application('sylius-upgrade-analyzer', '2.4.0');
 $application->add(new AnalyzeCommand($analyzers, $reporters, $fixEngine));
 $application->add(new MultiAnalyzeCommand($analyzers));
 $application->add(new CompareCommand($reportLoader));
