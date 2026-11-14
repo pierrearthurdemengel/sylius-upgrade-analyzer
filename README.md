@@ -570,6 +570,8 @@ vendor/bin/sylius-upgrade-analyzer sylius-upgrade:matrix \
   bitbag/wishlist-plugin,sylius/invoicing-plugin --format=markdown
 ```
 
+The status of every public Sylius plugin is also published, refreshed weekly, in the [Sylius 2 plugin readiness tracker](https://pierrearthurdemengel.github.io/sylius-2-plugin-readiness/). The method and a snapshot of the data are in the study [Sylius plugin ecosystem readiness for Sylius 2](https://doi.org/10.5281/zenodo.24224419) (Zenodo).
+
 ---
 
 ## Results on Public Projects
