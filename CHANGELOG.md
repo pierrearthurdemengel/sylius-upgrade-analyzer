@@ -7,6 +7,10 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Security
+- Composants Symfony passés de 7.4.22 à 7.4.23 pour corriger les avis de sécurité publiés le 4 novembre 2026, dont `PKSA-nktx-f1n1-b4yd` (temps d'analyse exponentiel du parser YAML, atteignable par les fichiers des projets audités) et deux avis sur `symfony/http-client`
+- Contraintes minimales relevées : `symfony/yaml` et `symfony/http-client` en `^6.4.50|^7.4.23`, pour qu'une installation ne résolve jamais une version vulnérable
+
 ## [2.5.1] - 2026-11-19
 
 ### Fixed
