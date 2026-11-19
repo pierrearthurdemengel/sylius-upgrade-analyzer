@@ -130,27 +130,53 @@ final class SemanticUiAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie l'estimation d'une heure (60 minutes) par fichier impacte.
-     * Chaque fichier contenant des classes Semantic UI est estime a MINUTES_PER_FILE (60).
+     * Verifie que les surcharges de templates Sylius ne sont pas estimees ici :
+     * leur restylage est compte avec la reprise de la surcharge.
      */
     #[Test]
-    public function testEstimatesOneHourPerFile(): void
+    public function testDoesNotEstimateTemplateOverrides(): void
     {
         $analyzer = new SemanticUiAnalyzer();
         $report = $this->createReportForFixture('project-complex');
 
         $analyzer->analyze($report);
 
-        /* Recherche des problemes individuels par fichier (pas le resume global) */
         $fileIssues = array_filter(
             $report->getIssues(),
             static fn ($issue): bool => str_contains($issue->getMessage(), 'Classes Semantic UI detectees dans'),
         );
 
-        /* Chaque fichier individuel doit etre estime a 60 minutes */
+        self::assertNotEmpty($fileIssues);
         foreach ($fileIssues as $issue) {
-            self::assertSame(60, $issue->getEstimatedMinutes());
+            self::assertSame(0, $issue->getEstimatedMinutes());
+            self::assertStringContainsString('compte dans l\'estimation de la surcharge', $issue->getDetail());
         }
+    }
+
+    /**
+     * Verifie l'estimation d'une heure par template propre au projet, et qu'une copie
+     * identique du meme template dans un second theme n'est comptee qu'une fois.
+     */
+    #[Test]
+    public function testEstimatesOneHourPerOwnTemplateAndCountsCopiesOnce(): void
+    {
+        $analyzer = new SemanticUiAnalyzer();
+        $report = $this->createReportForFixture('project-vendor-copies');
+
+        $analyzer->analyze($report);
+
+        $minutesByLabel = [];
+        foreach ($report->getIssues() as $issue) {
+            if (str_contains($issue->getMessage(), 'promo_banner.html.twig')) {
+                $minutesByLabel[$issue->getMessage()] = $issue->getEstimatedMinutes();
+            }
+        }
+
+        self::assertSame([
+            'Classes Semantic UI detectees dans themes/B2CTheme/templates/partials/promo_banner.html.twig' => 60,
+            'Classes Semantic UI detectees dans themes/ProTheme/templates/partials/promo_banner.html.twig' => 0,
+        ], $minutesByLabel);
+        self::assertSame(1.0, $report->getTotalEstimatedHours());
     }
 
     /**

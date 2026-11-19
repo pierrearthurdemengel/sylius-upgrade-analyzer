@@ -7,6 +7,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Tests\Unit\Analyzer\Twig;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TwigTemplateOverrideAnalyzer;
+use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
@@ -295,5 +296,116 @@ final class TwigTemplateOverrideAnalyzerTest extends TestCase
             'Template Twig surchargé détecté : SyliusShopBundle/Homepage/index.html.twig (thème themes/LegacyTheme)',
             $messages,
         );
+    }
+
+    /**
+     * Vérifie qu'une copie à l'identique du template Sylius (même réindentée et en CRLF)
+     * devient une suggestion de suppression, sans heure comptée.
+     */
+    #[Test]
+    public function testTreatsVerbatimVendorCopyAsDeletionWithoutHours(): void
+    {
+        $issue = $this->findIssueByFile(
+            'project-vendor-copies',
+            'templates/bundles/SyliusAdminBundle/Order/show.html.twig',
+        );
+
+        self::assertSame(Severity::SUGGESTION, $issue->getSeverity());
+        self::assertSame(0, $issue->getEstimatedMinutes());
+        self::assertSame(
+            'Copie à l\'identique d\'un template Sylius : SyliusAdminBundle/Order/show.html.twig',
+            $issue->getMessage(),
+        );
+    }
+
+    /**
+     * Vérifie qu'une retouche de quelques lignes d'un template Sylius est estimée
+     * sur l'écart avec l'original (15 min), et non sur le template entier (1 h).
+     */
+    #[Test]
+    public function testEstimatesSmallCustomisationFromVendorDiff(): void
+    {
+        $issue = $this->findIssueByFile(
+            'project-vendor-copies',
+            'themes/B2CTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig',
+        );
+
+        self::assertSame(Severity::WARNING, $issue->getSeverity());
+        self::assertSame(15, $issue->getEstimatedMinutes());
+        self::assertStringContainsString('3 ligne(s) personnalisée(s)', $issue->getDetail());
+    }
+
+    /**
+     * Vérifie qu'un template identique dans un second thème n'est pas compté deux fois.
+     */
+    #[Test]
+    public function testDoesNotCountIdenticalOverrideInSecondThemeTwice(): void
+    {
+        $issue = $this->findIssueByFile(
+            'project-vendor-copies',
+            'themes/ProTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig',
+        );
+
+        self::assertSame(0, $issue->getEstimatedMinutes());
+        self::assertStringContainsString(
+            'Identique à themes/B2CTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig',
+            $issue->getDetail(),
+        );
+    }
+
+    /**
+     * Vérifie qu'une variante d'un template déjà compté dans un autre thème n'est
+     * estimée que sur l'écart avec ce premier exemplaire.
+     */
+    #[Test]
+    public function testEstimatesThemeVariantFromFirstCopy(): void
+    {
+        $b2c = $this->findIssueByFile(
+            'project-vendor-copies',
+            'themes/B2CTheme/templates/bundles/SyliusShopBundle/Cart/summary.html.twig',
+        );
+        $pro = $this->findIssueByFile(
+            'project-vendor-copies',
+            'themes/ProTheme/templates/bundles/SyliusShopBundle/Cart/summary.html.twig',
+        );
+
+        self::assertSame(30, $b2c->getEstimatedMinutes());
+        self::assertSame(15, $pro->getEstimatedMinutes());
+        self::assertStringContainsString('Variante de themes/B2CTheme', $pro->getDetail());
+    }
+
+    /**
+     * Vérifie le total des surcharges d'un projet à deux thèmes quasi identiques :
+     * 15 min (fiche produit) + 30 min (panier B2C) + 15 min (écart du panier Pro).
+     */
+    #[Test]
+    public function testTotalForDuplicatedThemesCountsSharedWorkOnce(): void
+    {
+        $analyzer = new TwigTemplateOverrideAnalyzer();
+        $report = $this->createReportForFixture('project-vendor-copies');
+
+        $analyzer->analyze($report);
+
+        self::assertCount(5, $report->getIssues());
+        self::assertSame(1.0, $report->getTotalEstimatedHours());
+    }
+
+    /**
+     * Retourne l'unique issue de l'analyseur portant sur le fichier donné.
+     */
+    private function findIssueByFile(string $fixture, string $file): MigrationIssue
+    {
+        $analyzer = new TwigTemplateOverrideAnalyzer();
+        $report = $this->createReportForFixture($fixture);
+
+        $analyzer->analyze($report);
+
+        $issues = array_values(array_filter(
+            $report->getIssues(),
+            static fn (MigrationIssue $issue): bool => $issue->getFile() === $file,
+        ));
+        self::assertCount(1, $issues, sprintf('Une issue était attendue pour %s.', $file));
+
+        return $issues[0];
     }
 }

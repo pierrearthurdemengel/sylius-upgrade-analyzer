@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation\SonataBlockEventAnalyzer;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
+use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
 
@@ -165,24 +166,74 @@ final class SonataBlockEventAnalyzerTest extends TestCase
     }
 
     /**
-     * Verifie que l'estimation est de 60 minutes par usage.
+     * Verifie que les appels situes dans des surcharges de templates Sylius sont
+     * detectes mais pas estimes : ils sont comptes avec la reprise de la surcharge.
      */
     #[Test]
-    public function testEstimatesSixtyMinutesPerUsage(): void
+    public function testDoesNotEstimateCallsInTemplateOverrides(): void
     {
         $analyzer = new SonataBlockEventAnalyzer();
         $report = $this->createReportForFixture('project-moderate');
 
         $analyzer->analyze($report);
 
+        $globalIssue = $this->findSummaryIssue($report);
+
+        self::assertSame(0, $globalIssue->getEstimatedMinutes());
+    }
+
+    /**
+     * Verifie l'estimation de 30 minutes par appel dans un template propre au projet,
+     * une copie identique du template dans un second theme n'etant comptee qu'une fois.
+     * Les 15 appels des surcharges (copie admin, fiches produit et paniers) ne sont pas estimes.
+     */
+    #[Test]
+    public function testEstimatesThirtyMinutesPerCallInOwnTemplatesOnce(): void
+    {
+        $analyzer = new SonataBlockEventAnalyzer();
+        $report = $this->createReportForFixture('project-vendor-copies');
+
+        $analyzer->analyze($report);
+
+        $globalIssue = $this->findSummaryIssue($report);
+
+        self::assertSame('17 usage(s) de blocs Sonata / template events detecte(s)', $globalIssue->getMessage());
+        self::assertSame(30, $globalIssue->getEstimatedMinutes());
+        self::assertStringContainsString('1 appel(s) dans les templates propres au projet', $globalIssue->getDetail());
+    }
+
+    /**
+     * Verifie qu'une reference a BlockEventListener reste estimee a 60 minutes.
+     */
+    #[Test]
+    public function testEstimatesSixtyMinutesPerBlockEventListener(): void
+    {
+        $analyzer = new SonataBlockEventAnalyzer();
+        $report = $this->createReportForFixture('project-major');
+
+        $analyzer->analyze($report);
+
+        $listenerCount = count(array_filter(
+            $report->getIssues(),
+            static fn ($issue): bool => str_contains($issue->getMessage(), 'BlockEventListener'),
+        ));
+
+        self::assertGreaterThan(0, $listenerCount);
+        self::assertSame($listenerCount * 60, $this->findSummaryIssue($report)->getEstimatedMinutes());
+    }
+
+    /**
+     * Retourne le probleme de synthese de l'analyseur.
+     */
+    private function findSummaryIssue(MigrationReport $report): MigrationIssue
+    {
         $globalIssues = array_values(array_filter(
             $report->getIssues(),
             static fn ($issue): bool => str_contains($issue->getMessage(), 'usage(s) de blocs Sonata'),
         ));
+        self::assertCount(1, $globalIssues, 'Le probleme global de synthese devrait etre present.');
 
-        self::assertNotEmpty($globalIssues, 'Le probleme global de synthese devrait etre present.');
-        /* Au moins 1 usage x 60 minutes */
-        self::assertGreaterThanOrEqual(60, $globalIssues[0]->getEstimatedMinutes());
+        return $globalIssues[0];
     }
 
     /**
