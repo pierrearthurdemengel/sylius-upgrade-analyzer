@@ -7,6 +7,8 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-11-19
+
 ### Fixed
 - Les thèmes SyliusThemeBundle sont analysés : `themes/` et les répertoires déclarés dans `sylius_theme.sources.filesystem.directories`. Sur les boutiques dont les surcharges du shop vivent dans un thème, le total d'heures sous-estimait le lot templates
   - `Twig Template Override` : surcharges `themes/<Theme>/templates/bundles/Sylius*Bundle/` (ThemeBundle 2.x) et `themes/<Theme>/Sylius*Bundle/views/` (1.x), le thème est nommé dans le message
