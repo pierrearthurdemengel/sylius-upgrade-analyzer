@@ -1,0 +1,16 @@
+{% extends '@SyliusShop/layout.html.twig' %}
+
+{% block content %}
+    {% include '@SyliusShop/Product/Show/_breadcrumb.html.twig' %}
+    <div class="ui hidden divider"></div>
+    {% include "partials/promo_banner.html.twig" %}
+    <div class="ui two column stackable grid product-page">
+        <div class="column">
+            {{ sylius_template_event('sylius.shop.product.show.left_sidebar', _context) }}
+        </div>
+        <div class="column">
+            {{ sylius_template_event('sylius.shop.product.show.right_sidebar', _context) }}
+        </div>
+    </div>
+    {{ sylius_template_event('app.product.show.content', _context) }}
+{% endblock %}

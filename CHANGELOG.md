@@ -7,6 +7,14 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- L'estimation du lot templates ne compte plus plusieurs fois le même travail. Depuis l'analyse des thèmes (2.5.1), une boutique avec un thème B2C, un thème pro et des copies de l'admin pouvait afficher plus de 2 500 h
+  - `Twig Template Override` estime chaque surcharge sur l'écart avec le template d'origine de `vendor/` : 15 min jusqu'à 5 lignes personnalisées, 30 min jusqu'à 30, 1 h jusqu'à 100, 2 h au-delà, plafonné par l'estimation du template entier. Sans `vendor/`, l'estimation précédente s'applique
+  - Une copie à l'identique d'un template Sylius (indentation et fins de ligne ignorées) devient une suggestion « Copie à l'identique d'un template Sylius », sans heure : elle est supprimée en Sylius 2.x
+  - Un template surchargé dans plusieurs thèmes n'est compté en entier qu'une fois ; les autres thèmes ne comptent que leur écart avec le premier exemplaire
+  - `Semantic UI` ne compte plus d'heures pour les surcharges de templates, déjà estimées avec la reprise de la surcharge, ni pour les copies identiques d'un même template
+  - `Sonata Block Event` n'estime plus les appels situés dans les surcharges, et compte 30 min par appel dans les templates propres au projet (au lieu d'1 h), une seule fois par contenu identique. Les références à `BlockEventListener` restent à 1 h
+
 ## [2.5.2] - 2026-11-19
 
 ### Security

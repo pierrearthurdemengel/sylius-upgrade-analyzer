@@ -6,6 +6,7 @@ namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig\TemplateOverrideInventory;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -71,6 +72,14 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
 
         $affectedFiles = 0;
 
+        /*
+         * La reprise d'une surcharge Sylius, restylage compris, est deja estimee par
+         * l'analyseur Twig Template Override : ces fichiers ne sont pas comptes ici.
+         * Les copies identiques d'un meme template (theme duplique) ne sont comptees qu'une fois.
+         */
+        $overrides = TemplateOverrideInventory::overridePathSet($projectPath);
+        $countedFingerprints = [];
+
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
             if ($filePath === false) {
@@ -90,6 +99,21 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
             $detectedPatterns = $this->detectPatterns($content);
             $relativePath = TemplateDirectoryLocator::templateLabel($projectPath, $filePath);
 
+            $estimatedMinutes = self::MINUTES_PER_FILE;
+            $estimateNote = '';
+            if (isset($overrides[TemplateOverrideInventory::normalizePath($filePath)])) {
+                $estimatedMinutes = 0;
+                $estimateNote = ' Temps compte dans l\'estimation de la surcharge du template.';
+            } else {
+                $fingerprint = TemplateOverrideInventory::fingerprint($content);
+                if (isset($countedFingerprints[$fingerprint])) {
+                    $estimatedMinutes = 0;
+                    $estimateNote = sprintf(' Copie identique de %s, deja comptee.', $countedFingerprints[$fingerprint]);
+                } else {
+                    $countedFingerprints[$fingerprint] = $relativePath;
+                }
+            }
+
             $report->addIssue(new MigrationIssue(
                 severity: Severity::WARNING,
                 category: Category::FRONTEND,
@@ -101,9 +125,10 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
                 detail: sprintf(
                     'Le fichier %s contient des classes CSS Semantic UI : %s. '
                     . 'Sylius 2.x abandonne Semantic UI et necessite une migration '
-                    . 'vers le nouveau systeme front-end.',
+                    . 'vers le nouveau systeme front-end.%s',
                     $relativePath,
                     implode(', ', $detectedPatterns),
+                    $estimateNote,
                 ),
                 suggestion: 'Migrer les classes Semantic UI vers le systeme front-end '
                     . 'de Sylius 2.x. Consulter la documentation de migration pour '
@@ -112,7 +137,7 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
                 line: $this->findFirstOccurrenceLine($content),
                 codeSnippet: $this->extractSemanticUiSnippet($content),
                 docUrl: self::DOC_URL,
-                estimatedMinutes: self::MINUTES_PER_FILE,
+                estimatedMinutes: $estimatedMinutes,
             ));
         }
 

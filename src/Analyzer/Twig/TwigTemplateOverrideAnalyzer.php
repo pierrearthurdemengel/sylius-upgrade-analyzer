@@ -10,43 +10,33 @@ use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
-use Symfony\Component\Finder\Finder;
 
 /**
  * Analyseur de surcharges de templates Twig.
  * Détecte les templates Sylius surchargés qui devront être migrés vers le système de hooks Twig.
+ *
+ * L'estimation porte sur la personnalisation à reporter, pas sur le template entier :
+ * quand l'original Sylius est présent dans vendor/, seul l'écart avec lui est compté.
+ * Une copie à l'identique est simplement supprimée en Sylius 2.x, et un template
+ * surchargé dans plusieurs thèmes n'est compté en entier qu'une fois.
  */
 final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
 {
-    /**
-     * Répertoires à scanner pour détecter les surcharges de templates.
-     * Inclut les conventions Symfony 4/5 et les anciennes conventions Symfony 3.
-     *
-     * @var list<string>
+    /*
+     * Barème selon le nombre de lignes personnalisées par rapport à la référence.
+     * Une retouche de quelques lignes se reporte en un quart d'heure dans un hook ;
+     * au-delà de 100 lignes, la page est en pratique réécrite.
      */
-    private const SCAN_DIRECTORIES = [
-        'templates/bundles/SyliusShopBundle',
-        'templates/bundles/SyliusAdminBundle',
-        'templates/bundles/SyliusUiBundle',
-        'app/Resources/SyliusShopBundle/views',
-    ];
+    private const MINUTES_TINY_CHANGE = 15;
+    private const MINUTES_SMALL_CHANGE = 30;
+    private const MINUTES_MEDIUM_CHANGE = 60;
+    private const MINUTES_LARGE_CHANGE = 120;
 
-    /**
-     * Motif glob pour détecter les vues dans les bundles du projet.
-     */
-    private const BUNDLE_VIEWS_PATTERN = 'src/*/Resources/views';
+    private const MAX_LINES_TINY_CHANGE = 5;
+    private const MAX_LINES_SMALL_CHANGE = 30;
+    private const MAX_LINES_MEDIUM_CHANGE = 100;
 
-    /**
-     * Bundles Sylius dont les surcharges sont recherchées dans les thèmes,
-     * comme pour templates/bundles/.
-     *
-     * @var list<string>
-     */
-    private const OVERRIDABLE_BUNDLES = [
-        'SyliusShopBundle',
-        'SyliusAdminBundle',
-        'SyliusUiBundle',
-    ];
+    private const DOC_URL = 'https://docs.sylius.com/en/latest/the-book/frontend/twig-hooks.html';
 
     private readonly TwigHookMigrationMapper $mapper;
 
@@ -58,39 +48,69 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
     public function analyze(MigrationReport $report): void
     {
         $projectPath = $report->getProjectPath();
-        $templates = $this->findOverriddenTemplates($projectPath);
 
-        foreach ($templates as $templateFile) {
-            $relativePath = TemplateDirectoryLocator::relativePath($projectPath, $templateFile->getRealPath());
-            $bundlePath = $this->extractBundlePath($relativePath);
-            $theme = $this->extractThemeName($projectPath, $templateFile->getRealPath());
+        /* Premier exemplaire de chaque template, référence des variantes portées par les autres thèmes */
+        $firstCopies = [];
+
+        foreach (TemplateOverrideInventory::findOverrideFiles($projectPath) as $templateFile) {
+            $absolutePath = $templateFile->getRealPath();
+            $relativePath = TemplateDirectoryLocator::relativePath($projectPath, (string) $absolutePath);
+            $bundlePath = TemplateOverrideInventory::bundlePath($relativePath);
+            $theme = $this->extractThemeName($projectPath, $absolutePath);
             $content = $templateFile->getContents();
+            $location = $theme === null ? $bundlePath : sprintf('%s (thème %s)', $bundlePath, $theme);
 
-            /* Recherche de la correspondance avec un hook Sylius 2.x */
             $hookMapping = $this->mapper->mapTemplateToHook($bundlePath);
-
-            /* Calcul de l'estimation basée sur le contenu */
-            $contentMinutes = $this->mapper->getComplexityMinutes($bundlePath, $content);
-
-            /* Utilisation de l'estimation du mapping si disponible, sinon celle du contenu */
-            $estimatedMinutes = $hookMapping !== null
-                ? max($hookMapping['minutes'], $contentMinutes)
-                : $contentMinutes;
-
             $hookName = $hookMapping['hook'] ?? 'hook non répertorié';
+            $original = TemplateOverrideInventory::findVendorOriginal($projectPath, $bundlePath);
+
+            /* Une copie à l'identique n'a rien à migrer : elle est supprimée */
+            if ($original !== null && TemplateOverrideInventory::changedLines($content, $original) === 0) {
+                $report->addIssue(new MigrationIssue(
+                    severity: Severity::SUGGESTION,
+                    category: Category::TWIG,
+                    analyzer: $this->getName(),
+                    message: sprintf('Copie à l\'identique d\'un template Sylius : %s', $location),
+                    detail: 'Ce fichier reproduit le template Sylius d\'origine sans modification. '
+                        . 'Il n\'y a aucune personnalisation à reporter dans les hooks Twig.',
+                    suggestion: 'Supprimer ce fichier lors de la migration vers Sylius 2.x.',
+                    file: $relativePath,
+                    line: 1,
+                    docUrl: self::DOC_URL,
+                ));
+
+                continue;
+            }
+
+            [$estimatedMinutes, $basis] = $this->estimate($bundlePath, $content, $original);
+
+            /* Variante d'un template déjà compté dans un autre thème : seul l'écart avec lui est à porter */
+            $firstCopy = $firstCopies[$bundlePath] ?? null;
+            if ($firstCopy !== null) {
+                $siblingMinutes = $this->minutesForChangedLines(
+                    TemplateOverrideInventory::changedLines($content, $firstCopy['content']),
+                );
+                if ($siblingMinutes < $estimatedMinutes) {
+                    $estimatedMinutes = $siblingMinutes;
+                    $basis = $siblingMinutes === 0
+                        ? sprintf('Identique à %s, déjà compté.', $firstCopy['path'])
+                        : sprintf('Variante de %s, déjà compté : seul l\'écart est estimé.', $firstCopy['path']);
+                }
+            } else {
+                $firstCopies[$bundlePath] = ['content' => $content, 'path' => $relativePath];
+            }
 
             $report->addIssue(new MigrationIssue(
                 severity: Severity::WARNING,
                 category: Category::TWIG,
                 analyzer: $this->getName(),
-                message: $theme === null
-                    ? sprintf('Template Twig surchargé détecté : %s', $bundlePath)
-                    : sprintf('Template Twig surchargé détecté : %s (thème %s)', $bundlePath, $theme),
+                message: sprintf('Template Twig surchargé détecté : %s', $location),
                 detail: sprintf(
                     'Ce template surcharge un template Sylius natif. '
                     . 'Dans Sylius 2.x, le système de templates a été remplacé par des hooks Twig. '
-                    . 'Le hook correspondant est : %s',
+                    . 'Le hook correspondant est : %s. %s',
                     $hookName,
+                    $basis,
                 ),
                 suggestion: sprintf(
                     'Migrer cette surcharge vers le système de hooks Twig. '
@@ -101,7 +121,7 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
                 file: $relativePath,
                 line: 1,
                 codeSnippet: $this->extractSnippet($content),
-                docUrl: 'https://docs.sylius.com/en/latest/the-book/frontend/twig-hooks.html',
+                docUrl: self::DOC_URL,
                 estimatedMinutes: $estimatedMinutes,
             ));
         }
@@ -114,110 +134,54 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
 
     public function supports(MigrationReport $report): bool
     {
-        $projectPath = $report->getProjectPath();
-
-        /* Vérification de l'existence d'au moins un répertoire de surcharge */
-        foreach (self::SCAN_DIRECTORIES as $directory) {
-            $fullPath = $projectPath . '/' . $directory;
-            if (is_dir($fullPath)) {
-                return true;
-            }
-        }
-
-        /* Vérification des vues dans les bundles du projet */
-        $bundleViewsPath = $projectPath . '/' . self::BUNDLE_VIEWS_PATTERN;
-        $bundleViewDirs = glob($bundleViewsPath);
-        if ($bundleViewDirs !== false && count($bundleViewDirs) > 0) {
-            return true;
-        }
-
-        /* Vérification des surcharges portées par les thèmes */
-        return $this->findThemeOverrideDirectories($projectPath) !== [];
+        return TemplateOverrideInventory::hasOverrideDirectories($report->getProjectPath());
     }
 
     /**
-     * Recherche tous les fichiers Twig surchargés dans les répertoires ciblés.
+     * Estime la reprise d'une surcharge et explique la base de calcul.
      *
-     * @return \Symfony\Component\Finder\Finder<\SplFileInfo>
+     * Sans original dans vendor/ (vendor/ absent, ou template propre au projet),
+     * l'estimation retombe sur la complexité du template entier. Avec l'original,
+     * elle porte sur les lignes personnalisées, plafonnée par cette même complexité :
+     * reporter une personnalisation ne coûte jamais plus que migrer la page entière.
+     *
+     * @return array{int, string} Minutes estimées et explication
      */
-    private function findOverriddenTemplates(string $projectPath): Finder
+    private function estimate(string $bundlePath, string $content, ?string $original): array
     {
-        $finder = new Finder();
-        $finder->files()->name('*.twig');
+        $hookMapping = $this->mapper->mapTemplateToHook($bundlePath);
+        $contentMinutes = $this->mapper->getComplexityMinutes($bundlePath, $content);
+        $wholeTemplateMinutes = $hookMapping !== null
+            ? max($hookMapping['minutes'], $contentMinutes)
+            : $contentMinutes;
 
-        $directories = [];
-
-        /* Ajout des répertoires de surcharge standard */
-        foreach (self::SCAN_DIRECTORIES as $directory) {
-            $fullPath = $projectPath . '/' . $directory;
-            if (is_dir($fullPath)) {
-                $directories[] = $fullPath;
-            }
+        if ($original === null) {
+            return [
+                $wholeTemplateMinutes,
+                'Template d\'origine introuvable dans vendor/ : estimation sur le template entier.',
+            ];
         }
 
-        /* Ajout des vues dans les bundles du projet */
-        $bundleViewsPath = $projectPath . '/' . self::BUNDLE_VIEWS_PATTERN;
-        $bundleViewDirs = glob($bundleViewsPath);
-        if ($bundleViewDirs !== false) {
-            foreach ($bundleViewDirs as $dir) {
-                if (is_dir($dir)) {
-                    $directories[] = $dir;
-                }
-            }
-        }
+        $changedLines = TemplateOverrideInventory::changedLines($content, $original);
 
-        /* Ajout des surcharges portées par les thèmes SyliusThemeBundle */
-        foreach ($this->findThemeOverrideDirectories($projectPath) as $dir) {
-            $directories[] = $dir;
-        }
-
-        if (count($directories) === 0) {
-            /* Retour d'un finder vide si aucun répertoire n'est trouvé */
-            $finder->in(sys_get_temp_dir())->name('__impossible_match__');
-
-            return $finder;
-        }
-
-        $finder->in($directories);
-
-        return $finder;
+        return [
+            min($wholeTemplateMinutes, $this->minutesForChangedLines($changedLines)),
+            sprintf('%d ligne(s) personnalisée(s) par rapport au template d\'origine.', $changedLines),
+        ];
     }
 
     /**
-     * Recherche, dans chaque thème, les répertoires de surcharge des bundles Sylius.
-     * Deux structures coexistent selon la version de SyliusThemeBundle :
-     * themes/<Theme>/templates/bundles/SyliusShopBundle/ (2.x)
-     * et themes/<Theme>/SyliusShopBundle/views/ (1.x).
-     *
-     * @return list<string>
+     * Convertit un volume de lignes personnalisées en minutes selon le barème.
      */
-    private function findThemeOverrideDirectories(string $projectPath): array
+    private function minutesForChangedLines(int $changedLines): int
     {
-        $themeRoots = TemplateDirectoryLocator::locateThemeRoots($projectPath);
-        if ($themeRoots === []) {
-            return [];
-        }
-
-        $finder = new Finder();
-        $finder->directories()
-            ->in($themeRoots)
-            ->exclude(TemplateDirectoryLocator::EXCLUDED_DIRECTORIES)
-            ->name(self::OVERRIDABLE_BUNDLES);
-
-        $directories = [];
-        foreach ($finder as $dir) {
-            $path = str_replace('\\', '/', $dir->getPathname());
-
-            if (str_ends_with(dirname($path), '/templates/bundles')) {
-                $directories[] = $path;
-            } elseif (is_dir($path . '/views')) {
-                $directories[] = $path . '/views';
-            }
-        }
-
-        sort($directories);
-
-        return $directories;
+        return match (true) {
+            $changedLines === 0 => 0,
+            $changedLines <= self::MAX_LINES_TINY_CHANGE => self::MINUTES_TINY_CHANGE,
+            $changedLines <= self::MAX_LINES_SMALL_CHANGE => self::MINUTES_SMALL_CHANGE,
+            $changedLines <= self::MAX_LINES_MEDIUM_CHANGE => self::MINUTES_MEDIUM_CHANGE,
+            default => self::MINUTES_LARGE_CHANGE,
+        };
     }
 
     /**
@@ -245,35 +209,6 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
         }
 
         return null;
-    }
-
-    /**
-     * Extrait le chemin du bundle depuis le chemin relatif du template.
-     * Par exemple : templates/bundles/SyliusShopBundle/Product/show.html.twig
-     * ou themes/MyTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig
-     * devient : SyliusShopBundle/Product/show.html.twig
-     */
-    private function extractBundlePath(string $relativePath): string
-    {
-        /* Normalisation des séparateurs */
-        $normalized = str_replace('\\', '/', $relativePath);
-
-        /* Extraction depuis templates/bundles/ (projet ou thème) */
-        if (preg_match('#(?:^|/)templates/bundles/(Sylius\w+Bundle/.+)$#', $normalized, $matches)) {
-            return $matches[1];
-        }
-
-        /* Extraction depuis src/.../Resources/views/ */
-        if (preg_match('#^src/[^/]+/Resources/views/(.+)$#', $normalized, $matches)) {
-            return $matches[1];
-        }
-
-        /* Extraction depuis .../SyliusXxxBundle/views/ (app/Resources ou thème 1.x) */
-        if (preg_match('#(?:^|/)(Sylius\w+Bundle)/views/(.+)$#', $normalized, $matches)) {
-            return $matches[1] . '/' . $matches[2];
-        }
-
-        return $normalized;
     }
 
     /**

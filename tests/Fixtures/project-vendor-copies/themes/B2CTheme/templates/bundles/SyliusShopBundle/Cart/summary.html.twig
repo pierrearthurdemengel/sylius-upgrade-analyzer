@@ -1,0 +1,32 @@
+{% extends '@SyliusShop/layout.html.twig' %}
+
+{% import '@SyliusUi/Macro/messages.html.twig' as messages %}
+
+{% set header = 'sylius.ui.your_shopping_cart' %}
+
+{% block title %}{{ header|trans }} | {{ parent() }}{% endblock %}
+
+{% block content %}
+    {% if not cart.empty %}
+        {{ sylius_template_event('sylius.shop.cart.header', {'header': header, 'cart': cart}) }}
+        <div class="ui stackable grid">
+            <div class="eleven wide column">
+                {{ sylius_template_event('sylius.shop.cart.items', {'cart': cart, 'form': form}) }}
+            </div>
+            <div class="five wide column">
+                {{ sylius_template_event('sylius.shop.cart.summary', {'cart': cart}) }}
+                <div class="ui segment reassurance">
+                    <h4 class="ui header">{{ 'app.cart.reassurance.title'|trans }}</h4>
+                    <div class="ui list">
+                        <div class="item"><i class="truck icon"></i>{{ 'app.cart.reassurance.shipping'|trans }}</div>
+                        <div class="item"><i class="lock icon"></i>{{ 'app.cart.reassurance.payment'|trans }}</div>
+                        <div class="item"><i class="undo icon"></i>{{ 'app.cart.reassurance.returns'|trans }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{ sylius_template_event('sylius.shop.cart.suggestions', {'cart': cart}) }}
+    {% else %}
+        {{ messages.info('sylius.ui.your_cart_is_empty') }}
+    {% endif %}
+{% endblock %}
