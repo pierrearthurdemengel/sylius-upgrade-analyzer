@@ -183,4 +183,25 @@ final class RemovedRouteAnalyzerTest extends TestCase
         /* Au moins 1 reference x 30 minutes */
         self::assertGreaterThanOrEqual(30, $globalIssues[0]->getEstimatedMinutes());
     }
+
+    /**
+     * Verifie que les routes supprimees appelees depuis un theme sont detectees.
+     */
+    #[Test]
+    public function testDetectsRemovedRouteInTheme(): void
+    {
+        $analyzer = new RemovedRouteAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        self::assertTrue($analyzer->supports($report));
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Route supprimee "sylius_shop_partial_taxon_index_by_code" utilisee dans le template '
+            . 'themes/BootstrapTheme/templates/bundles/SyliusShopBundle/layout.html.twig',
+            $messages,
+        );
+    }
 }

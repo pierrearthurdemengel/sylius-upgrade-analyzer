@@ -226,4 +226,74 @@ final class TwigTemplateOverrideAnalyzerTest extends TestCase
             self::assertSame(Severity::WARNING, $issue->getSeverity());
         }
     }
+
+    /**
+     * Vérifie que les surcharges portées par les thèmes sont détectées, en plus
+     * de celle de templates/bundles/ : thème 2.x, thème 1.x et thème déclaré
+     * uniquement dans sylius_theme.sources.filesystem.directories.
+     */
+    #[Test]
+    public function testDetectsOverridesInThemes(): void
+    {
+        $analyzer = new TwigTemplateOverrideAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        self::assertTrue($analyzer->supports($report));
+        $analyzer->analyze($report);
+
+        $files = array_map(static fn ($issue): ?string => $issue->getFile(), $report->getIssues());
+        sort($files);
+
+        self::assertSame([
+            'brand-themes/AcmeOutletTheme/templates/bundles/SyliusShopBundle/Checkout/layout.html.twig',
+            'templates/bundles/SyliusShopBundle/Cart/summary.html.twig',
+            'themes/BootstrapTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig',
+            'themes/BootstrapTheme/templates/bundles/SyliusShopBundle/layout.html.twig',
+            'themes/LegacyTheme/SyliusShopBundle/views/Homepage/index.html.twig',
+        ], $files);
+    }
+
+    /**
+     * Vérifie que le message d'une surcharge de thème nomme le thème, pour
+     * distinguer deux thèmes qui surchargent le même template.
+     */
+    #[Test]
+    public function testNamesThemeInOverrideMessage(): void
+    {
+        $analyzer = new TwigTemplateOverrideAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Template Twig surchargé détecté : SyliusShopBundle/Product/show.html.twig (thème themes/BootstrapTheme)',
+            $messages,
+        );
+        self::assertContains(
+            'Template Twig surchargé détecté : SyliusShopBundle/Cart/summary.html.twig',
+            $messages,
+        );
+    }
+
+    /**
+     * Vérifie que la structure 1.x des thèmes (SyliusShopBundle/views/) est ramenée
+     * au même chemin de bundle que templates/bundles/, pour le mapping vers les hooks.
+     */
+    #[Test]
+    public function testMapsLegacyThemeStructureToBundlePath(): void
+    {
+        $analyzer = new TwigTemplateOverrideAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Template Twig surchargé détecté : SyliusShopBundle/Homepage/index.html.twig (thème themes/LegacyTheme)',
+            $messages,
+        );
+    }
 }

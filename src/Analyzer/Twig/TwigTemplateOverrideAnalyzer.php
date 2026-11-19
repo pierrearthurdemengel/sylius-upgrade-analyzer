@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Twig;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -35,6 +36,18 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
      */
     private const BUNDLE_VIEWS_PATTERN = 'src/*/Resources/views';
 
+    /**
+     * Bundles Sylius dont les surcharges sont recherchées dans les thèmes,
+     * comme pour templates/bundles/.
+     *
+     * @var list<string>
+     */
+    private const OVERRIDABLE_BUNDLES = [
+        'SyliusShopBundle',
+        'SyliusAdminBundle',
+        'SyliusUiBundle',
+    ];
+
     private readonly TwigHookMigrationMapper $mapper;
 
     public function __construct(?TwigHookMigrationMapper $mapper = null)
@@ -48,8 +61,9 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
         $templates = $this->findOverriddenTemplates($projectPath);
 
         foreach ($templates as $templateFile) {
-            $relativePath = $this->getRelativePath($projectPath, $templateFile->getRealPath());
+            $relativePath = TemplateDirectoryLocator::relativePath($projectPath, $templateFile->getRealPath());
             $bundlePath = $this->extractBundlePath($relativePath);
+            $theme = $this->extractThemeName($projectPath, $templateFile->getRealPath());
             $content = $templateFile->getContents();
 
             /* Recherche de la correspondance avec un hook Sylius 2.x */
@@ -69,7 +83,9 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
                 severity: Severity::WARNING,
                 category: Category::TWIG,
                 analyzer: $this->getName(),
-                message: sprintf('Template Twig surchargé détecté : %s', $bundlePath),
+                message: $theme === null
+                    ? sprintf('Template Twig surchargé détecté : %s', $bundlePath)
+                    : sprintf('Template Twig surchargé détecté : %s (thème %s)', $bundlePath, $theme),
                 detail: sprintf(
                     'Ce template surcharge un template Sylius natif. '
                     . 'Dans Sylius 2.x, le système de templates a été remplacé par des hooks Twig. '
@@ -115,7 +131,8 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
             return true;
         }
 
-        return false;
+        /* Vérification des surcharges portées par les thèmes */
+        return $this->findThemeOverrideDirectories($projectPath) !== [];
     }
 
     /**
@@ -149,6 +166,11 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
             }
         }
 
+        /* Ajout des surcharges portées par les thèmes SyliusThemeBundle */
+        foreach ($this->findThemeOverrideDirectories($projectPath) as $dir) {
+            $directories[] = $dir;
+        }
+
         if (count($directories) === 0) {
             /* Retour d'un finder vide si aucun répertoire n'est trouvé */
             $finder->in(sys_get_temp_dir())->name('__impossible_match__');
@@ -162,23 +184,73 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Calcule le chemin relatif d'un fichier par rapport à la racine du projet.
+     * Recherche, dans chaque thème, les répertoires de surcharge des bundles Sylius.
+     * Deux structures coexistent selon la version de SyliusThemeBundle :
+     * themes/<Theme>/templates/bundles/SyliusShopBundle/ (2.x)
+     * et themes/<Theme>/SyliusShopBundle/views/ (1.x).
+     *
+     * @return list<string>
      */
-    private function getRelativePath(string $projectPath, string $absolutePath): string
+    private function findThemeOverrideDirectories(string $projectPath): array
     {
-        $projectPath = rtrim(str_replace('\\', '/', $projectPath), '/');
-        $absolutePath = str_replace('\\', '/', $absolutePath);
-
-        if (str_starts_with($absolutePath, $projectPath)) {
-            return ltrim(substr($absolutePath, strlen($projectPath)), '/');
+        $themeRoots = TemplateDirectoryLocator::locateThemeRoots($projectPath);
+        if ($themeRoots === []) {
+            return [];
         }
 
-        return $absolutePath;
+        $finder = new Finder();
+        $finder->directories()
+            ->in($themeRoots)
+            ->exclude(TemplateDirectoryLocator::EXCLUDED_DIRECTORIES)
+            ->name(self::OVERRIDABLE_BUNDLES);
+
+        $directories = [];
+        foreach ($finder as $dir) {
+            $path = str_replace('\\', '/', $dir->getPathname());
+
+            if (str_ends_with(dirname($path), '/templates/bundles')) {
+                $directories[] = $path;
+            } elseif (is_dir($path . '/views')) {
+                $directories[] = $path . '/views';
+            }
+        }
+
+        sort($directories);
+
+        return $directories;
+    }
+
+    /**
+     * Retourne le chemin du thème (relatif au projet) qui contient le fichier,
+     * ou null si le fichier n'appartient à aucun thème.
+     * Par exemple : themes/BootstrapTheme
+     */
+    private function extractThemeName(string $projectPath, string|false $absolutePath): ?string
+    {
+        if ($absolutePath === false) {
+            return null;
+        }
+
+        $normalized = str_replace('\\', '/', $absolutePath);
+
+        foreach (TemplateDirectoryLocator::locateThemeRoots($projectPath) as $root) {
+            if (!str_starts_with($normalized, $root . '/')) {
+                continue;
+            }
+
+            /* Le thème est le premier segment situé sous la racine des thèmes */
+            $segments = explode('/', substr($normalized, strlen($root) + 1));
+
+            return TemplateDirectoryLocator::relativePath($projectPath, $root . '/' . $segments[0]);
+        }
+
+        return null;
     }
 
     /**
      * Extrait le chemin du bundle depuis le chemin relatif du template.
      * Par exemple : templates/bundles/SyliusShopBundle/Product/show.html.twig
+     * ou themes/MyTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig
      * devient : SyliusShopBundle/Product/show.html.twig
      */
     private function extractBundlePath(string $relativePath): string
@@ -186,20 +258,19 @@ final class TwigTemplateOverrideAnalyzer implements AnalyzerInterface
         /* Normalisation des séparateurs */
         $normalized = str_replace('\\', '/', $relativePath);
 
-        /* Extraction depuis templates/bundles/ */
-        $bundlesPrefix = 'templates/bundles/';
-        if (str_starts_with($normalized, $bundlesPrefix)) {
-            return substr($normalized, strlen($bundlesPrefix));
-        }
-
-        /* Extraction depuis app/Resources/.../views/ */
-        if (preg_match('#^app/Resources/(Sylius\w+Bundle)/views/(.+)$#', $normalized, $matches)) {
-            return $matches[1] . '/' . $matches[2];
+        /* Extraction depuis templates/bundles/ (projet ou thème) */
+        if (preg_match('#(?:^|/)templates/bundles/(Sylius\w+Bundle/.+)$#', $normalized, $matches)) {
+            return $matches[1];
         }
 
         /* Extraction depuis src/.../Resources/views/ */
         if (preg_match('#^src/[^/]+/Resources/views/(.+)$#', $normalized, $matches)) {
             return $matches[1];
+        }
+
+        /* Extraction depuis .../SyliusXxxBundle/views/ (app/Resources ou thème 1.x) */
+        if (preg_match('#(?:^|/)(Sylius\w+Bundle)/views/(.+)$#', $normalized, $matches)) {
+            return $matches[1] . '/' . $matches[2];
         }
 
         return $normalized;

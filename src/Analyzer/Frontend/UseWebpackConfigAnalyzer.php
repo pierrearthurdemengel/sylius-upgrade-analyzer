@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -51,6 +52,13 @@ final class UseWebpackConfigAnalyzer implements AnalyzerInterface
         /* Verification dans les templates Twig */
         if ($this->hasPatternInDirectory($projectPath . '/templates', ['*.twig', '*.html.twig'])) {
             return true;
+        }
+
+        /* Verification dans les themes SyliusThemeBundle */
+        foreach (TemplateDirectoryLocator::locateThemeRoots($projectPath) as $themeRoot) {
+            if ($this->hasPatternInDirectory($themeRoot, ['*.twig', '*.html.twig'])) {
+                return true;
+            }
         }
 
         return false;
@@ -186,13 +194,10 @@ final class UseWebpackConfigAnalyzer implements AnalyzerInterface
      */
     private function analyzeTwigTemplates(MigrationReport $report, string $projectPath): int
     {
-        $templatesDir = $projectPath . '/templates';
-        if (!is_dir($templatesDir)) {
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.twig', '*.html.twig']);
+        if ($finder === null) {
             return 0;
         }
-
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name('*.twig')->name('*.html.twig');
 
         $count = 0;
 
@@ -208,7 +213,7 @@ final class UseWebpackConfigAnalyzer implements AnalyzerInterface
             }
 
             $lines = explode("\n", $content);
-            $relativePath = 'templates/' . $file->getRelativePathname();
+            $relativePath = TemplateDirectoryLocator::relativePath($projectPath, $filePath);
 
             foreach ($lines as $index => $line) {
                 if (!str_contains($line, self::TWIG_PATTERN)) {

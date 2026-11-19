@@ -7,6 +7,13 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- Les thèmes SyliusThemeBundle sont analysés : `themes/` et les répertoires déclarés dans `sylius_theme.sources.filesystem.directories`. Sur les boutiques dont les surcharges du shop vivent dans un thème, le total d'heures sous-estimait le lot templates
+  - `Twig Template Override` : surcharges `themes/<Theme>/templates/bundles/Sylius*Bundle/` (ThemeBundle 2.x) et `themes/<Theme>/Sylius*Bundle/views/` (1.x), le thème est nommé dans le message
+  - `Semantic UI`, `Sonata Block Event`, `Removed Route`, `use_webpack` et `API Endpoint Restructure` lisent aussi les templates des thèmes, hors `node_modules/` et `vendor/`
+  - Le correctif `Twig Hook` reconnaît la structure 1.x des thèmes
+  - Les messages des fichiers de `templates/` sont inchangés : les baselines existantes restent valides
+
 ## [2.5.0] - 2026-11-04
 
 Chaque correctif automatique a été rejoué sur une entrée réelle et chaque règle confrontée aux sources de Sylius 1.14 et 2.0. Plusieurs règles produisaient un résultat faux : elles sont corrigées ou retirées.

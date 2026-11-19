@@ -5,16 +5,17 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Frontend;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Severity;
-use Symfony\Component\Finder\Finder;
 
 /**
  * Analyseur de l'utilisation de Semantic UI dans les templates Twig.
  * Sylius 2.x abandonne Semantic UI au profit d'un systeme front-end moderne.
- * Cet analyseur detecte les classes CSS Semantic UI dans les fichiers Twig du projet.
+ * Cet analyseur detecte les classes CSS Semantic UI dans les fichiers Twig du projet,
+ * y compris ceux des themes SyliusThemeBundle.
  */
 final class SemanticUiAnalyzer implements AnalyzerInterface
 {
@@ -52,30 +53,21 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
 
     public function supports(MigrationReport $report): bool
     {
-        $templatesDir = $report->getProjectPath() . '/templates';
-        if (!is_dir($templatesDir)) {
-            return false;
-        }
+        /* Verification de la presence d'au moins un fichier Twig (templates/ ou themes) */
+        $finder = TemplateDirectoryLocator::createTwigFinder($report->getProjectPath());
 
-        /* Verification de la presence d'au moins un fichier Twig */
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name('*.twig');
-
-        return $finder->hasResults();
+        return $finder !== null && $finder->hasResults();
     }
 
     public function analyze(MigrationReport $report): void
     {
         $projectPath = $report->getProjectPath();
-        $templatesDir = $projectPath . '/templates';
 
-        if (!is_dir($templatesDir)) {
+        /* Recherche de tous les fichiers Twig dans templates/ et dans les themes */
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.html.twig', '*.twig']);
+        if ($finder === null) {
             return;
         }
-
-        /* Recherche de tous les fichiers Twig dans le repertoire templates/ */
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name(['*.html.twig', '*.twig']);
 
         $affectedFiles = 0;
 
@@ -96,7 +88,7 @@ final class SemanticUiAnalyzer implements AnalyzerInterface
 
             /* Identification des motifs Semantic UI specifiques trouves */
             $detectedPatterns = $this->detectPatterns($content);
-            $relativePath = $file->getRelativePathname();
+            $relativePath = TemplateDirectoryLocator::templateLabel($projectPath, $filePath);
 
             $report->addIssue(new MigrationIssue(
                 severity: Severity::WARNING,

@@ -1,0 +1,12 @@
+{% extends '@SyliusShop/layout.html.twig' %}
+
+{% block content %}
+    <div class="ui two column stackable grid">
+        <div class="column">
+            {{ sylius_template_event('sylius.shop.product.show.left_sidebar', {'product': product}) }}
+        </div>
+        <div class="column" data-reset-url="/api/v2/shop/reset-password-requests">
+            {{ sylius_template_event('sylius.shop.product.show.right_sidebar', {'product': product}) }}
+        </div>
+    </div>
+{% endblock %}

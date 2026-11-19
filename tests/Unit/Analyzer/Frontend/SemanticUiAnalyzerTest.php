@@ -184,4 +184,33 @@ final class SemanticUiAnalyzerTest extends TestCase
 
         self::assertCount(1, $summaryIssues, 'Un seul probleme de synthese doit etre cree.');
     }
+
+    /**
+     * Verifie que les templates des themes sont analyses, et que les dependances
+     * embarquees dans un theme (node_modules) sont ignorees.
+     */
+    #[Test]
+    public function testDetectsSemanticUiClassesInThemes(): void
+    {
+        $analyzer = new SemanticUiAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Classes Semantic UI detectees dans bundles/SyliusShopBundle/Cart/summary.html.twig',
+            $messages,
+        );
+        self::assertContains(
+            'Classes Semantic UI detectees dans themes/BootstrapTheme/templates/bundles/SyliusShopBundle/layout.html.twig',
+            $messages,
+        );
+        self::assertContains(
+            'Classes Semantic UI detectees dans brand-themes/AcmeOutletTheme/templates/bundles/SyliusShopBundle/Checkout/layout.html.twig',
+            $messages,
+        );
+        self::assertContains('5 fichier(s) Twig contenant des classes Semantic UI detecte(s)', $messages);
+    }
 }

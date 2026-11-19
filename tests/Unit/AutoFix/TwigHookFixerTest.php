@@ -118,4 +118,23 @@ final class TwigHookFixerTest extends TestCase
 
         self::assertNull($this->fixer->fix($this->createIssue(), $this->tempDir));
     }
+
+    #[Test]
+    public function testRegistersHookForLegacyThemeOverride(): void
+    {
+        $issue = new MigrationIssue(
+            severity: Severity::WARNING,
+            category: Category::TWIG,
+            analyzer: 'Twig Template Override',
+            message: 'Surcharge de template detectee',
+            detail: '',
+            suggestion: '',
+            file: 'themes/LegacyTheme/SyliusShopBundle/views/Product/show.html.twig',
+        );
+
+        $fix = $this->fixer->fix($issue, $this->tempDir);
+
+        self::assertNotNull($fix);
+        self::assertArrayHasKey('sylius_shop.product.show.content', $this->hooksOf($fix->fixedContent));
+    }
 }
