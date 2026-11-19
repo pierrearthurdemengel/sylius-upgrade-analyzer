@@ -7,6 +7,8 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.5.3] - 2026-11-19
+
 ### Fixed
 - L'estimation du lot templates ne compte plus plusieurs fois le même travail. Depuis l'analyse des thèmes (2.5.1), une boutique avec un thème B2C, un thème pro et des copies de l'admin pouvait afficher plus de 2 500 h
   - `Twig Template Override` estime chaque surcharge sur l'écart avec le template d'origine de `vendor/` : 15 min jusqu'à 5 lignes personnalisées, 30 min jusqu'à 30, 1 h jusqu'à 100, 2 h au-delà, plafonné par l'estimation du template entier. Sans `vendor/`, l'estimation précédente s'applique
