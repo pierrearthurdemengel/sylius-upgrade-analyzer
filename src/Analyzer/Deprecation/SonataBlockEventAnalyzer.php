@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -37,12 +38,9 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
     {
         $projectPath = $report->getProjectPath();
 
-        /* Verification dans les templates Twig */
-        $templatesDir = $projectPath . '/templates';
-        if (is_dir($templatesDir)) {
-            $finder = new Finder();
-            $finder->files()->in($templatesDir)->name('*.html.twig');
-
+        /* Verification dans les templates Twig (templates/ et themes) */
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.html.twig']);
+        if ($finder !== null) {
             foreach ($finder as $file) {
                 $content = (string) file_get_contents((string) $file->getRealPath());
                 if (str_contains($content, 'sonata_block_render_event')
@@ -111,19 +109,17 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Detecte les appels a sonata_block_render_event() dans les templates Twig.
+     * Detecte les appels a sonata_block_render_event() dans les templates Twig et les themes.
      * Retourne le nombre d'usages detectes.
      */
     private function analyzeSonataBlockEvents(MigrationReport $report, string $projectPath): int
     {
-        $templatesDir = $projectPath . '/templates';
-        if (!is_dir($templatesDir)) {
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.html.twig']);
+        if ($finder === null) {
             return 0;
         }
 
         $count = 0;
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name('*.html.twig');
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -136,6 +132,7 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
                 continue;
             }
 
+            $label = TemplateDirectoryLocator::templateLabel($projectPath, $filePath);
             $lines = explode("\n", $content);
             foreach ($lines as $index => $line) {
                 if (!str_contains($line, 'sonata_block_render_event')) {
@@ -151,12 +148,12 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
                     analyzer: $this->getName(),
                     message: sprintf(
                         'Appel a sonata_block_render_event() detecte dans %s',
-                        $file->getRelativePathname(),
+                        $label,
                     ),
                     detail: sprintf(
                         'Le template %s utilise sonata_block_render_event() ligne %d. '
                         . 'Cette fonction est supprimee dans Sylius 2.0 au profit de Twig Hooks.',
-                        $file->getRelativePathname(),
+                        $label,
                         $lineNumber,
                     ),
                     suggestion: 'Remplacer sonata_block_render_event() par la fonction hook() '
@@ -173,19 +170,17 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Detecte les appels a sylius_template_event() dans les templates Twig.
+     * Detecte les appels a sylius_template_event() dans les templates Twig et les themes.
      * Retourne le nombre d'usages detectes.
      */
     private function analyzeSyliusTemplateEvents(MigrationReport $report, string $projectPath): int
     {
-        $templatesDir = $projectPath . '/templates';
-        if (!is_dir($templatesDir)) {
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.html.twig']);
+        if ($finder === null) {
             return 0;
         }
 
         $count = 0;
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name('*.html.twig');
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -198,6 +193,7 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
                 continue;
             }
 
+            $label = TemplateDirectoryLocator::templateLabel($projectPath, $filePath);
             $lines = explode("\n", $content);
             foreach ($lines as $index => $line) {
                 if (!str_contains($line, 'sylius_template_event')) {
@@ -213,12 +209,12 @@ final class SonataBlockEventAnalyzer implements AnalyzerInterface
                     analyzer: $this->getName(),
                     message: sprintf(
                         'Appel a sylius_template_event() detecte dans %s',
-                        $file->getRelativePathname(),
+                        $label,
                     ),
                     detail: sprintf(
                         'Le template %s utilise sylius_template_event() ligne %d. '
                         . 'Cette fonction est supprimee dans Sylius 2.0 au profit de Twig Hooks.',
-                        $file->getRelativePathname(),
+                        $label,
                         $lineNumber,
                     ),
                     suggestion: 'Remplacer sylius_template_event() par la fonction hook() '

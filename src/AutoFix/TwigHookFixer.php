@@ -112,13 +112,13 @@ final class TwigHookFixer implements AutoFixInterface
     {
         $normalized = str_replace('\\', '/', $filePath);
 
-        /* Extraction depuis templates/bundles/ */
+        /* Extraction depuis templates/bundles/ (projet ou thème) */
         if (preg_match('#templates/bundles/(Sylius\w+Bundle/.+)$#', $normalized, $matches)) {
             return $matches[1];
         }
 
-        /* Extraction depuis app/Resources/.../views/ */
-        if (preg_match('#app/Resources/(Sylius\w+Bundle)/views/(.+)$#', $normalized, $matches)) {
+        /* Extraction depuis .../SyliusXxxBundle/views/ (app/Resources ou thème 1.x) */
+        if (preg_match('#(?:^|/)(Sylius\w+Bundle)/views/(.+)$#', $normalized, $matches)) {
             return $matches[1] . '/' . $matches[2];
         }
 

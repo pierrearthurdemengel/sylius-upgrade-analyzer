@@ -184,4 +184,26 @@ final class SonataBlockEventAnalyzerTest extends TestCase
         /* Au moins 1 usage x 60 minutes */
         self::assertGreaterThanOrEqual(60, $globalIssues[0]->getEstimatedMinutes());
     }
+
+    /**
+     * Verifie que les appels presents dans les themes sont comptes, hors node_modules.
+     * 2 sonata_block_render_event (themes) + 4 sylius_template_event (templates/ et themes).
+     */
+    #[Test]
+    public function testCountsUsagesInThemes(): void
+    {
+        $analyzer = new SonataBlockEventAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        self::assertTrue($analyzer->supports($report));
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Appel a sonata_block_render_event() detecte dans themes/LegacyTheme/SyliusShopBundle/views/Homepage/index.html.twig',
+            $messages,
+        );
+        self::assertContains('6 usage(s) de blocs Sonata / template events detecte(s)', $messages);
+    }
 }

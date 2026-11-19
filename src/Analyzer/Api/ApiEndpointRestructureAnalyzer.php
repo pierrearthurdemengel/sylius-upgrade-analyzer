@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Api;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -63,6 +64,13 @@ final class ApiEndpointRestructureAnalyzer implements AnalyzerInterface
             return true;
         }
 
+        /* Verification dans les themes SyliusThemeBundle */
+        foreach (TemplateDirectoryLocator::locateThemeRoots($projectPath) as $themeRoot) {
+            if ($this->hasEndpointReferencesInDirectory($themeRoot, ['*.twig', '*.html.twig'])) {
+                return true;
+            }
+        }
+
         /* Verification dans les fichiers JS */
         if ($this->hasEndpointReferencesInDirectory($projectPath . '/assets', ['*.js', '*.ts'])) {
             return true;
@@ -96,6 +104,16 @@ final class ApiEndpointRestructureAnalyzer implements AnalyzerInterface
             ['*.twig', '*.html.twig'],
             'templates/',
         );
+
+        /* Etape 2 bis : analyse des templates Twig des themes */
+        foreach (TemplateDirectoryLocator::locateThemeRoots($projectPath) as $themeRoot) {
+            $totalReferences += $this->analyzeDirectory(
+                $report,
+                $themeRoot,
+                ['*.twig', '*.html.twig'],
+                TemplateDirectoryLocator::relativePath($projectPath, $themeRoot) . '/',
+            );
+        }
 
         /* Etape 3 : analyse des fichiers JS */
         $totalReferences += $this->analyzeDirectory(

@@ -198,4 +198,29 @@ final class ApiEndpointRestructureAnalyzerTest extends TestCase
         self::assertSame(0, $minutes % 60, 'L\'estimation doit etre un multiple de 60 minutes.');
         self::assertGreaterThan(0, $minutes);
     }
+
+    /**
+     * Verifie que les anciens endpoints appeles depuis un theme sont detectes.
+     */
+    #[Test]
+    public function testDetectsOldEndpointInThemeTemplates(): void
+    {
+        $analyzer = new ApiEndpointRestructureAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        self::assertTrue($analyzer->supports($report));
+        $analyzer->analyze($report);
+
+        /* Les separateurs suivent le systeme de fichiers : normalisation pour Windows */
+        $messages = array_map(
+            static fn ($issue): string => str_replace('\\', '/', $issue->getMessage()),
+            $report->getIssues(),
+        );
+
+        self::assertContains(
+            'Ancien endpoint API detecte dans themes/BootstrapTheme/templates/bundles/SyliusShopBundle/Product/show.html.twig '
+            . 'ligne 8 : /api/v2/shop/reset-password-requests',
+            $messages,
+        );
+    }
 }

@@ -1,0 +1,10 @@
+{
+    "name": "acme/bootstrap-theme",
+    "type": "sylius-theme",
+    "extra": {
+        "sylius-theme": {
+            "title": "Acme Bootstrap Theme",
+            "parents": ["sylius/bootstrap-theme"]
+        }
+    }
+}

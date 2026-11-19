@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PierreArthur\SyliusUpgradeAnalyzer\Analyzer\Deprecation;
 
 use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\AnalyzerInterface;
+use PierreArthur\SyliusUpgradeAnalyzer\Analyzer\TemplateDirectoryLocator;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\Category;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationIssue;
 use PierreArthur\SyliusUpgradeAnalyzer\Model\MigrationReport;
@@ -84,8 +85,9 @@ final class RemovedRouteAnalyzer implements AnalyzerInterface
         if (is_dir($projectPath . '/src')) {
             $dirs[] = $projectPath . '/src';
         }
-        if (is_dir($projectPath . '/templates')) {
-            $dirs[] = $projectPath . '/templates';
+        /* templates/ et themes : les routes partielles du shop sont souvent appelees depuis un theme */
+        foreach (TemplateDirectoryLocator::locate($projectPath) as $templateDir) {
+            $dirs[] = $templateDir;
         }
 
         if ($dirs === []) {
@@ -93,7 +95,7 @@ final class RemovedRouteAnalyzer implements AnalyzerInterface
         }
 
         $finder = new Finder();
-        $finder->files()->in($dirs)->name('*.php')->name('*.html.twig');
+        $finder->files()->in($dirs)->exclude(TemplateDirectoryLocator::EXCLUDED_DIRECTORIES)->name('*.php')->name('*.html.twig');
 
         foreach ($finder as $file) {
             $content = (string) file_get_contents((string) $file->getRealPath());
@@ -208,19 +210,18 @@ final class RemovedRouteAnalyzer implements AnalyzerInterface
     }
 
     /**
-     * Analyse les templates Twig dans templates/ pour les appels path() et url() vers des routes supprimees.
+     * Analyse les templates Twig de templates/ et des themes pour les appels path() et url()
+     * vers des routes supprimees.
      * Retourne le nombre de references trouvees.
      */
     private function analyzeTwigFiles(MigrationReport $report, string $projectPath): int
     {
-        $templatesDir = $projectPath . '/templates';
-        if (!is_dir($templatesDir)) {
+        $finder = TemplateDirectoryLocator::createTwigFinder($projectPath, ['*.html.twig']);
+        if ($finder === null) {
             return 0;
         }
 
         $count = 0;
-        $finder = new Finder();
-        $finder->files()->in($templatesDir)->name('*.html.twig');
 
         foreach ($finder as $file) {
             $filePath = $file->getRealPath();
@@ -230,6 +231,7 @@ final class RemovedRouteAnalyzer implements AnalyzerInterface
 
             $content = (string) file_get_contents($filePath);
             $lines = explode("\n", $content);
+            $label = TemplateDirectoryLocator::templateLabel($projectPath, $filePath);
 
             foreach (self::REMOVED_ROUTES as $route) {
                 if (!str_contains($content, $route)) {
@@ -253,12 +255,12 @@ final class RemovedRouteAnalyzer implements AnalyzerInterface
                         message: sprintf(
                             'Route supprimee "%s" utilisee dans le template %s',
                             $route,
-                            $file->getRelativePathname(),
+                            $label,
                         ),
                         detail: sprintf(
                             'Le template %s utilise la route "%s" (ligne %d) '
                             . 'qui a ete supprimee dans Sylius 2.0.',
-                            $file->getRelativePathname(),
+                            $label,
                             $route,
                             $lineNumber,
                         ),

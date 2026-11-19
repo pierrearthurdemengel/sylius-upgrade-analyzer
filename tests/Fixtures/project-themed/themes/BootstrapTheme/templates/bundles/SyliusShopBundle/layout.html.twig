@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="{{ app.request.locale|slice(0, 2) }}">
+<head>
+    <title>{% block title %}Acme Shop{% endblock %}</title>
+    {% if use_webpack %}
+        {{ encore_entry_link_tags('shop-entry', null, 'shop') }}
+    {% endif %}
+</head>
+<body>
+    <div class="ui container">
+        {{ sonata_block_render_event('sylius.shop.layout.before_header') }}
+        {% block header %}{% endblock %}
+        <a href="{{ path('sylius_shop_partial_taxon_index_by_code', {'code': 'MENU_CATEGORY'}) }}">Catalogue</a>
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

@@ -176,4 +176,25 @@ final class UseWebpackConfigAnalyzerTest extends TestCase
         self::assertSame(0, $minutes % 60, 'L\'estimation doit etre un multiple de 60 minutes.');
         self::assertGreaterThan(0, $minutes);
     }
+
+    /**
+     * Verifie que use_webpack est detecte dans le layout d'un theme.
+     */
+    #[Test]
+    public function testDetectsUseWebpackInThemeTemplates(): void
+    {
+        $analyzer = new UseWebpackConfigAnalyzer();
+        $report = $this->createReportForFixture('project-themed');
+
+        self::assertTrue($analyzer->supports($report));
+        $analyzer->analyze($report);
+
+        $messages = array_map(static fn ($issue): string => $issue->getMessage(), $report->getIssues());
+
+        self::assertContains(
+            'Variable use_webpack utilisee dans le template '
+            . 'themes/BootstrapTheme/templates/bundles/SyliusShopBundle/layout.html.twig ligne 5',
+            $messages,
+        );
+    }
 }

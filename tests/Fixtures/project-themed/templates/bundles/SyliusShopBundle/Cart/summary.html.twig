@@ -1,0 +1,7 @@
+{% extends '@SyliusShop/layout.html.twig' %}
+
+{% block content %}
+    <div class="ui segment">
+        {{ sylius_template_event('sylius.shop.cart.summary.items', {'cart': cart}) }}
+    </div>
+{% endblock %}
