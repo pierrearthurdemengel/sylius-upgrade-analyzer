@@ -84,7 +84,11 @@ final class TemplateDirectoryLocator
         }
 
         $finder = new Finder();
-        $finder->files()->in($directories)->exclude(self::EXCLUDED_DIRECTORIES)->name($patterns);
+        /*
+         * Tri explicite : l'ordre de parcours du système de fichiers diffère entre Windows et Linux,
+         * or le premier exemplaire d'un template dupliqué est celui dont le temps est compté.
+         */
+        $finder->files()->in($directories)->exclude(self::EXCLUDED_DIRECTORIES)->name($patterns)->sortByName();
 
         return $finder;
     }
