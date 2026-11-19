@@ -7,6 +7,9 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- Les templates sont parcourus dans le même ordre sous Linux et sous Windows. Quand un même template est dupliqué entre deux thèmes, le rapport compte désormais toujours le même exemplaire ; le total d'heures, lui, ne changeait pas
+
 ## [2.5.3] - 2026-11-19
 
 ### Fixed
