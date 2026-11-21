@@ -211,4 +211,46 @@ final class CsvReporterTest extends TestCase
         $display = $output->fetch();
         self::assertStringContainsString('CSV', $display);
     }
+
+    /** Vérifie qu'une barre oblique inverse suivie d'un guillemet ne casse pas la colonne. */
+    #[Test]
+    public function testGenerateKeepsBackslashBeforeQuote(): void
+    {
+        $outputPath = sys_get_temp_dir() . '/csv-test-escape-' . uniqid() . '.csv';
+        $this->tempFiles[] = $outputPath;
+
+        $message = 'Remplacer "App\" par "App\Entity\"';
+
+        $report = new MigrationReport(
+            startedAt: new \DateTimeImmutable(),
+            detectedSyliusVersion: '1.12.0',
+            targetVersion: '2.0.0',
+            projectPath: sys_get_temp_dir(),
+        );
+        $report->addIssue(new MigrationIssue(
+            severity: Severity::WARNING,
+            category: Category::FRONTEND,
+            analyzer: 'TestAnalyzer',
+            message: $message,
+            detail: 'Détail technique',
+            suggestion: 'Suggestion de correction',
+        ));
+        $output = new BufferedOutput();
+
+        $this->reporter->generate($report, $output, ['output_file' => $outputPath]);
+
+        $handle = fopen($outputPath, 'r');
+        self::assertNotFalse($handle);
+        /* premier fgetcsv : la ligne d'en-têtes (avec le BOM) */
+        $headers = fgetcsv($handle, separator: ';', escape: '');
+        self::assertIsArray($headers);
+        /* second fgetcsv : la ligne du problème */
+        $row = fgetcsv($handle, separator: ';', escape: '');
+        self::assertIsArray($row);
+        fclose($handle);
+
+        self::assertCount(count($headers), $row);
+        self::assertSame($message, $row[3]);
+        self::assertSame('Détail technique', $row[4]);
+    }
 }
