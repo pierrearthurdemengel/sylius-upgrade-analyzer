@@ -21,6 +21,9 @@ final class CsvReporter implements ReporterInterface
     /** Séparateur compatible Excel FR */
     private const SEPARATOR = ';';
 
+    /** Pas d'échappement propre à PHP : le CSV respecte la norme RFC 4180 attendue par les tableurs */
+    private const ESCAPE = '';
+
     /** En-têtes des colonnes */
     private const HEADERS = [
         'Catégorie',
@@ -72,11 +75,11 @@ final class CsvReporter implements ReporterInterface
         fwrite($handle, self::UTF8_BOM);
 
         /* En-têtes */
-        fputcsv($handle, self::HEADERS, self::SEPARATOR);
+        fputcsv($handle, self::HEADERS, self::SEPARATOR, escape: self::ESCAPE);
 
         /* Données : toutes les issues, toutes sévérités confondues */
         foreach ($report->getIssues() as $issue) {
-            fputcsv($handle, $this->issueToRow($issue), self::SEPARATOR);
+            fputcsv($handle, $this->issueToRow($issue), self::SEPARATOR, escape: self::ESCAPE);
         }
 
         fclose($handle);

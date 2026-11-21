@@ -9,6 +9,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 - Les templates sont parcourus dans le même ordre sous Linux et sous Windows. Quand un même template est dupliqué entre deux thèmes, le rapport compte désormais toujours le même exemplaire ; le total d'heures, lui, ne changeait pas
+- Le rapport CSV suit la norme RFC 4180 : un message où une barre oblique inverse précède un guillemet (`"App\"` par exemple) est relu à l'identique par Excel ou LibreOffice. Sous PHP 8.4 et plus, l'export CSV ne déclenche plus l'avertissement de dépréciation sur le paramètre `$escape` de `fputcsv()`
 
 ## [2.5.3] - 2026-11-19
 
